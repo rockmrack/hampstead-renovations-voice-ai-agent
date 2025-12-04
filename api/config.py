@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     app_name: str = "Hampstead Voice Agent API"
     app_version: str = "2.0.0"
     debug: bool = False
+    debug_mode: bool = False
+    testing: bool = False
     environment: str = Field(default="development", pattern="^(development|staging|production)$")
 
     # Server
@@ -33,15 +35,15 @@ class Settings(BaseSettings):
     reload: bool = False
 
     # API Keys - External Services
-    anthropic_api_key: str = Field(..., min_length=1)
-    deepgram_api_key: str = Field(..., min_length=1)
-    elevenlabs_api_key: str = Field(..., min_length=1)
-    vapi_api_key: str = Field(..., min_length=1)
+    anthropic_api_key: str = Field(default="", description="Anthropic API key for Claude")
+    deepgram_api_key: str = Field(default="", description="Deepgram API key for STT")
+    elevenlabs_api_key: str = Field(default="", description="ElevenLabs API key for TTS")
+    vapi_api_key: str = Field(default="", description="VAPI API key for voice calls")
     vapi_assistant_id: Optional[str] = None
     vapi_webhook_secret: Optional[str] = None
 
     # WhatsApp (360dialog)
-    whatsapp_api_key: str = Field(..., min_length=1)
+    whatsapp_api_key: str = Field(default="", description="360dialog API key")
     whatsapp_api_url: str = "https://waba.360dialog.io/v1"
     whatsapp_phone_number_id: Optional[str] = None
 
@@ -51,7 +53,7 @@ class Settings(BaseSettings):
     twilio_phone_number: Optional[str] = None
 
     # HubSpot CRM
-    hubspot_api_key: str = Field(..., min_length=1)
+    hubspot_api_key: str = Field(default="", description="HubSpot API key")
     hubspot_portal_id: Optional[str] = None
 
     # Microsoft Graph (Calendar)
