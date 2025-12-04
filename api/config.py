@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str = Field(default="", description="ElevenLabs API key for TTS")
     vapi_api_key: str = Field(default="", description="VAPI API key for voice calls")
     vapi_assistant_id: Optional[str] = None
+    vapi_phone_number_id: Optional[str] = None
     vapi_webhook_secret: Optional[str] = None
 
     # WhatsApp (360dialog)

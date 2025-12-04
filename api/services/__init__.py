@@ -11,6 +11,7 @@ from services.elevenlabs_service import elevenlabs_service
 from services.hubspot_service import hubspot_service
 from services.notification_service import notification_service
 from services.storage_service import storage_service
+from services.vapi_service import vapi_service
 from services.whatsapp_service import whatsapp_service
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "hubspot_service",
     "notification_service",
     "storage_service",
+    "vapi_service",
     "whatsapp_service",
 ]

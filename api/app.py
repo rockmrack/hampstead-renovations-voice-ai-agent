@@ -15,9 +15,9 @@ from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
 from config import settings
-from middleware.error_handler import error_handler_middleware
+from middleware.error_handler import ErrorHandlerMiddleware
 from middleware.rate_limiter import RateLimiterMiddleware
-from middleware.request_logger import RequestLoggingMiddleware
+from middleware.request_logger import RequestLoggerMiddleware
 from routes import calendar, health, vapi_webhooks, voice, whatsapp
 from utils.metrics import setup_metrics
 
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("verifying_api_connections")
 
         # Setup metrics
-        setup_metrics()
+        setup_metrics(app)
 
         logger.info("application_started_successfully")
 
@@ -99,11 +99,9 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(RequestLoggerMiddleware)
 app.add_middleware(RateLimiterMiddleware)
-
-# Add error handler
-app.middleware("http")(error_handler_middleware)
+app.add_middleware(ErrorHandlerMiddleware)
 
 # Mount Prometheus metrics endpoint
 metrics_app = make_asgi_app()

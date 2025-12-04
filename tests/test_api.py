@@ -26,7 +26,11 @@ os.environ["VAPI_API_KEY"] = "test-key"
 os.environ["WHATSAPP_API_KEY"] = "test-key"
 os.environ["HUBSPOT_API_KEY"] = "test-key"
 
-from api.app import app
+# Add api directory to path for imports
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
+
+from app import app
 
 
 # =============================================================================
