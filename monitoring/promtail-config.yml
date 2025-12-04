@@ -1,0 +1,118 @@
+# =============================================================================
+# PROMTAIL CONFIGURATION
+# =============================================================================
+# Log shipping for Hampstead Renovations Voice AI Agent
+# =============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    tenant_id: hampstead
+    batchwait: 1s
+    batchsize: 1048576
+    timeout: 10s
+
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # Voice API Application Logs
+  # ---------------------------------------------------------------------------
+  - job_name: voice-api-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: voice-api
+          service: hampstead-voice-agent
+          __path__: /var/log/api/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            timestamp: timestamp
+            message: message
+            request_id: request_id
+            module: module
+      - labels:
+          level:
+          module:
+          request_id:
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+  # ---------------------------------------------------------------------------
+  # Docker Container Logs
+  # ---------------------------------------------------------------------------
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'project'
+    pipeline_stages:
+      - match:
+          selector: '{service="api"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  message: message
+                  request_id: request_id
+            - labels:
+                level:
+                request_id:
+
+  # ---------------------------------------------------------------------------
+  # N8N Workflow Logs
+  # ---------------------------------------------------------------------------
+  - job_name: n8n-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: n8n
+          service: workflow-engine
+          __path__: /var/log/n8n/*.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+(?P<level>\w+)\s+(?P<message>.*)$'
+      - labels:
+          level:
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+  # ---------------------------------------------------------------------------
+  # System Logs
+  # ---------------------------------------------------------------------------
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<host>\S+)\s+(?P<service>\S+):\s+(?P<message>.*)$'
+      - labels:
+          host:
+          service:
+
+# =============================================================================
+# TARGET GROUPS (for service discovery)
+# =============================================================================
+target_config:
+  sync_period: 10s

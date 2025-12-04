@@ -1,0 +1,170 @@
+{
+  "transcription": {
+    "model": "nova-2",
+    "version": "latest",
+    "language": "en-GB",
+    "tier": "enhanced"
+  },
+  "features": {
+    "smart_format": true,
+    "punctuate": true,
+    "paragraphs": true,
+    "utterances": true,
+    "diarize": false,
+    "filler_words": false,
+    "profanity_filter": false,
+    "redact": [],
+    "numerals": true,
+    "measurements": true,
+    "dictation": false
+  },
+  "keywords": {
+    "enabled": true,
+    "boost_words": [
+      {"word": "Hampstead", "boost": 5},
+      {"word": "Belsize", "boost": 5},
+      {"word": "Primrose", "boost": 4},
+      {"word": "NW3", "boost": 5},
+      {"word": "NW6", "boost": 5},
+      {"word": "NW11", "boost": 5},
+      {"word": "Ross", "boost": 5},
+      {"word": "loft conversion", "boost": 4},
+      {"word": "kitchen extension", "boost": 4},
+      {"word": "renovation", "boost": 3},
+      {"word": "extension", "boost": 3},
+      {"word": "basement", "boost": 3},
+      {"word": "bathroom", "boost": 3},
+      {"word": "survey", "boost": 3},
+      {"word": "quote", "boost": 3},
+      {"word": "dormer", "boost": 4},
+      {"word": "mansard", "boost": 4},
+      {"word": "planning permission", "boost": 4},
+      {"word": "conservation area", "boost": 4},
+      {"word": "building control", "boost": 3},
+      {"word": "party wall", "boost": 4}
+    ]
+  },
+  "audio_input": {
+    "encoding": "linear16",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16
+  },
+  "streaming": {
+    "enabled": true,
+    "interim_results": true,
+    "endpointing": {
+      "enabled": true,
+      "vad_turnoff": 500,
+      "utterance_end_ms": 1000
+    },
+    "no_delay": false
+  },
+  "callbacks": {
+    "url": "{{API_BASE_URL}}/deepgram/callback",
+    "method": "POST",
+    "events": ["transcript", "utterance_end", "speech_final"]
+  },
+  "processing": {
+    "detect_language": false,
+    "detect_entities": false,
+    "detect_topics": false,
+    "summarize": false,
+    "sentiment": true,
+    "intents": {
+      "enabled": true,
+      "custom_intents": [
+        {
+          "name": "pricing_inquiry",
+          "examples": [
+            "how much does it cost",
+            "what's the price",
+            "can you give me a quote",
+            "what would it cost to",
+            "roughly how much"
+          ]
+        },
+        {
+          "name": "booking_request",
+          "examples": [
+            "book a survey",
+            "arrange a visit",
+            "can someone come round",
+            "schedule an appointment",
+            "when can you come"
+          ]
+        },
+        {
+          "name": "location_check",
+          "examples": [
+            "do you cover",
+            "do you work in",
+            "are you in my area",
+            "can you come to"
+          ]
+        },
+        {
+          "name": "timeline_inquiry",
+          "examples": [
+            "how long does it take",
+            "when can you start",
+            "how far in advance",
+            "what's the timeline"
+          ]
+        },
+        {
+          "name": "human_request",
+          "examples": [
+            "speak to someone",
+            "talk to a person",
+            "speak to Ross",
+            "can I speak to a human",
+            "transfer me"
+          ]
+        },
+        {
+          "name": "complaint",
+          "examples": [
+            "not happy",
+            "problem with",
+            "complaint",
+            "issue with",
+            "disappointed"
+          ]
+        }
+      ]
+    }
+  },
+  "quality": {
+    "min_confidence_threshold": 0.7,
+    "low_confidence_action": "flag_for_review",
+    "noise_reduction": true,
+    "echo_cancellation": true
+  },
+  "storage": {
+    "store_audio": true,
+    "store_transcript": true,
+    "retention_days": 90,
+    "storage_bucket": "{{AWS_S3_BUCKET}}/transcripts"
+  },
+  "rate_limits": {
+    "max_concurrent_streams": 50,
+    "max_audio_duration_seconds": 3600,
+    "requests_per_minute": 100
+  },
+  "error_handling": {
+    "retry_on_error": true,
+    "max_retries": 3,
+    "retry_delay_ms": 1000,
+    "fallback_on_failure": {
+      "enabled": true,
+      "fallback_model": "nova-2-general"
+    }
+  },
+  "monitoring": {
+    "log_level": "info",
+    "metrics_enabled": true,
+    "alert_on_errors": true,
+    "alert_threshold": 5
+  }
+}

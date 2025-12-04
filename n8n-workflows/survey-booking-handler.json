@@ -1,0 +1,503 @@
+{
+  "name": "Survey Booking Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "survey-booking",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Booking Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.VOICE_API_URL }}/api/v1/calendar/availability",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "preferred_date",
+              "value": "={{ $json.preferred_date }}"
+            },
+            {
+              "name": "postcode",
+              "value": "={{ $json.postcode }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-availability",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.available }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "slot-available",
+      "name": "Slot Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendarId": "={{ $env.SURVEY_CALENDAR_ID }}",
+        "start": "={{ $node['Check Availability'].json.slot_start }}",
+        "end": "={{ $node['Check Availability'].json.slot_end }}",
+        "additionalFields": {
+          "summary": "Survey: {{ $node['Booking Request'].json.customer_name }} - {{ $node['Booking Request'].json.postcode }}",
+          "description": "**Customer Details**\nName: {{ $node['Booking Request'].json.customer_name }}\nPhone: {{ $node['Booking Request'].json.phone }}\nEmail: {{ $node['Booking Request'].json.email }}\n\n**Property**\nAddress: {{ $node['Booking Request'].json.address }}\nPostcode: {{ $node['Booking Request'].json.postcode }}\n\n**Project**\nType: {{ $node['Booking Request'].json.project_type }}\nDescription: {{ $node['Booking Request'].json.project_description }}\n\n**Notes**\n{{ $node['Booking Request'].json.notes }}",
+          "location": "{{ $node['Booking Request'].json.address }}, {{ $node['Booking Request'].json.postcode }}",
+          "colorId": "9",
+          "attendees": [
+            "={{ $env.SURVEYOR_EMAIL }}"
+          ],
+          "sendUpdates": "all",
+          "conferenceData": {
+            "createRequest": {
+              "requestId": "={{ $node['Booking Request'].json.booking_id }}",
+              "conferenceSolutionKey": {
+                "type": "hangoutsMeet"
+              }
+            }
+          }
+        }
+      },
+      "id": "create-calendar-event",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [850, 200],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "gcal-cred",
+          "name": "Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "update",
+        "contactId": "={{ $node['Booking Request'].json.hubspot_contact_id }}",
+        "updateFields": {
+          "lifecycleStage": "salesqualifiedlead",
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "survey_booked",
+                "value": "true"
+              },
+              {
+                "property": "survey_date",
+                "value": "={{ $node['Check Availability'].json.slot_start }}"
+              },
+              {
+                "property": "survey_calendar_event_id",
+                "value": "={{ $node['Create Calendar Event'].json.id }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "update-hubspot",
+      "name": "Update HubSpot Contact",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1050, 200],
+      "credentials": {
+        "hubspotApi": {
+          "id": "hubspot-cred",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://waba.360dialog.io/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "D360-API-KEY",
+              "value": "={{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $node['Booking Request'].json.phone }}\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"survey_confirmation\",\n    \"language\": {\n      \"code\": \"en_GB\"\n    },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"{{ $node['Booking Request'].json.customer_name.split(' ')[0] }}\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"{{ $formatDate($node['Check Availability'].json.slot_start, 'dddd, D MMMM') }}\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"{{ $formatDate($node['Check Availability'].json.slot_start, 'h:mm a') }}\"\n          }\n        ]\n      }\n    ]\n  }\n}"
+      },
+      "id": "send-whatsapp-confirmation",
+      "name": "WhatsApp Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $node['Booking Request'].json.email }}",
+        "subject": "Your Survey is Booked - Hampstead Renovations",
+        "emailType": "html",
+        "message": "<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Georgia, serif; color: #2C3E50; line-height: 1.6; }\n    .header { background: #2C3E50; color: white; padding: 30px; text-align: center; }\n    .content { padding: 30px; max-width: 600px; margin: 0 auto; }\n    .detail-box { background: #f8f9fa; border-left: 4px solid #B8860B; padding: 20px; margin: 20px 0; }\n    .button { display: inline-block; background: #B8860B; color: white; padding: 12px 24px; text-decoration: none; margin: 10px 5px; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <h1>Survey Confirmed</h1>\n  </div>\n  <div class=\"content\">\n    <p>Dear {{ $node['Booking Request'].json.customer_name.split(' ')[0] }},</p>\n    \n    <p>Wonderful news! Your property survey has been confirmed. Here are the details:</p>\n    \n    <div class=\"detail-box\">\n      <strong>📅 Date:</strong> {{ $formatDate($node['Check Availability'].json.slot_start, 'dddd, D MMMM YYYY') }}<br>\n      <strong>🕐 Time:</strong> {{ $formatDate($node['Check Availability'].json.slot_start, 'h:mm a') }} - {{ $formatDate($node['Check Availability'].json.slot_end, 'h:mm a') }}<br>\n      <strong>📍 Address:</strong> {{ $node['Booking Request'].json.address }}, {{ $node['Booking Request'].json.postcode }}\n    </div>\n    \n    <h3>What to Expect</h3>\n    <p>Our surveyor will:</p>\n    <ul>\n      <li>Conduct a thorough assessment of your property</li>\n      <li>Discuss your vision and requirements in detail</li>\n      <li>Take measurements and photographs</li>\n      <li>Provide initial guidance on possibilities and timelines</li>\n    </ul>\n    \n    <p>The survey typically takes 60-90 minutes. Please ensure someone is available to provide access to all areas being considered for renovation.</p>\n    \n    <h3>Need to Reschedule?</h3>\n    <p>If your plans change, please let us know at least 24 hours in advance.</p>\n    \n    <p>\n      <a href=\"tel:+442073871234\" class=\"button\">📞 Call Us</a>\n      <a href=\"https://wa.me/447900000000\" class=\"button\">💬 WhatsApp</a>\n    </p>\n    \n    <p>We look forward to meeting you!</p>\n    \n    <p>Warm regards,<br>\n    <strong>The Hampstead Renovations Team</strong></p>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "send-email-confirmation",
+      "name": "Email Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1450, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-cred",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#bookings",
+        "text": ":calendar: *New Survey Booked*\n\n*Customer:* {{ $node['Booking Request'].json.customer_name }}\n*Date:* {{ $formatDate($node['Check Availability'].json.slot_start, 'ddd D MMM, h:mm a') }}\n*Location:* {{ $node['Booking Request'].json.postcode }}\n*Project:* {{ $node['Booking Request'].json.project_type }}\n\n<{{ $node['Create Calendar Event'].json.htmlLink }}|View in Calendar>",
+        "otherOptions": {}
+      },
+      "id": "slack-booking-notification",
+      "name": "Notify Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1650, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  status: 'booked',\n  booking_id: $node['Booking Request'].json.booking_id,\n  event_id: $node['Create Calendar Event'].json.id,\n  slot_start: $node['Check Availability'].json.slot_start,\n  slot_end: $node['Check Availability'].json.slot_end,\n  confirmation_sent: true\n}) }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Booking Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  status: 'unavailable',\n  alternative_slots: $json.alternative_slots,\n  message: 'Requested slot not available'\n}) }}",
+        "options": {}
+      },
+      "id": "respond-unavailable",
+      "name": "Slot Unavailable",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "reminder-schedule",
+      "name": "Daily Reminder Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 550]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "getAll",
+        "calendarId": "={{ $env.SURVEY_CALENDAR_ID }}",
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{ $now.toISO() }}",
+          "timeMax": "={{ $now.plus({ hours: 48 }).toISO() }}"
+        }
+      },
+      "id": "get-upcoming-surveys",
+      "name": "Get Tomorrow's Surveys",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [450, 550],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "gcal-cred",
+          "name": "Google Calendar"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-surveys",
+      "name": "Split Surveys",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [650, 550]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.summary }}",
+              "operation": "startsWith",
+              "value2": "Survey:"
+            }
+          ]
+        }
+      },
+      "id": "is-survey",
+      "name": "Is Survey?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract phone from event description\nconst description = $input.item.json.description || '';\nconst phoneMatch = description.match(/Phone:\\s*(\\+?[\\d\\s]+)/);\nconst nameMatch = description.match(/Name:\\s*([^\\n]+)/);\n\nreturn {\n  phone: phoneMatch ? phoneMatch[1].replace(/\\s/g, '') : null,\n  name: nameMatch ? nameMatch[1].trim() : 'Customer',\n  survey_date: $input.item.json.start.dateTime,\n  survey_time: new Date($input.item.json.start.dateTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })\n};"
+      },
+      "id": "extract-contact",
+      "name": "Extract Contact Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 550]
+    },
+    {
+      "parameters": {
+        "url": "https://waba.360dialog.io/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "D360-API-KEY",
+              "value": "={{ $env.WHATSAPP_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{ $json.phone }}\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"survey_reminder\",\n    \"language\": {\n      \"code\": \"en_GB\"\n    },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          {\n            \"type\": \"text\",\n            \"text\": \"{{ $json.name.split(' ')[0] }}\"\n          },\n          {\n            \"type\": \"text\",\n            \"text\": \"tomorrow at {{ $json.survey_time }}\"\n          }\n        ]\n      }\n    ]\n  }\n}"
+      },
+      "id": "send-reminder",
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 550]
+    }
+  ],
+  "connections": {
+    "Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Check Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability": {
+      "main": [
+        [
+          {
+            "node": "Slot Available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slot Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slot Unavailable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Update HubSpot Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update HubSpot Contact": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Email Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Notify Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Team": {
+      "main": [
+        [
+          {
+            "node": "Booking Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily Reminder Check": {
+      "main": [
+        [
+          {
+            "node": "Get Tomorrow's Surveys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tomorrow's Surveys": {
+      "main": [
+        [
+          {
+            "node": "Split Surveys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Surveys": {
+      "main": [
+        [
+          {
+            "node": "Is Survey?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Survey?": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contact Info": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Split Surveys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Booking"
+    },
+    {
+      "name": "Calendar"
+    },
+    {
+      "name": "Production"
+    }
+  ]
+}

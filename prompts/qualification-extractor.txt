@@ -1,0 +1,157 @@
+Extract structured lead qualification data from this conversation.
+
+═══════════════════════════════════════════════════════════════════════════════
+CONVERSATION TRANSCRIPT
+═══════════════════════════════════════════════════════════════════════════════
+
+{{conversation_transcript}}
+
+═══════════════════════════════════════════════════════════════════════════════
+EXTRACTION SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
+
+Extract the following information into a structured JSON format.
+Use null for any fields where information was not provided or cannot be inferred.
+
+{
+  "contact": {
+    "name": "Full name if provided, else null",
+    "first_name": "First name extracted, else null",
+    "last_name": "Last name extracted, else null",
+    "phone": "Phone number in E.164 format if provided, else null",
+    "email": "Email address if provided, else null",
+    "preferred_contact_method": "phone | whatsapp | email | null"
+  },
+  
+  "property": {
+    "full_address": "Complete address if provided, else null",
+    "postcode": "Postcode if mentioned (format: NW3 2AA), else null",
+    "area_name": "Recognized area name (Hampstead, Belsize Park, etc.), else null",
+    "property_type": "flat | terraced | semi-detached | detached | mansion-block | end-terrace | maisonette | unknown",
+    "bedrooms": "Number if mentioned, else null",
+    "is_conservation_area": "yes | no | likely | unknown",
+    "is_listed": "yes | no | unknown",
+    "ownership": "owned | leasehold | unknown"
+  },
+  
+  "project": {
+    "primary_type": "kitchen-extension | loft-conversion | bathroom | full-renovation | basement | side-extension | rear-extension | maintenance | other | unknown",
+    "secondary_types": ["Array of additional project types mentioned"],
+    "description": "Brief description in customer's words, else null",
+    "size_indication": "Any size mentioned (e.g., '20 sqm', 'small', 'large'), else null",
+    "specific_requirements": ["Array of specific features mentioned (e.g., 'bi-fold doors', 'en-suite', 'open plan')"],
+    "inspiration_mentioned": "true | false",
+    "planning_awareness": "understands-needed | thinks-not-needed | unsure | not-discussed"
+  },
+  
+  "budget": {
+    "explicitly_mentioned": true | false,
+    "stated_amount": "Exact figure if given (e.g., '100000'), else null",
+    "stated_range": {
+      "min": "Lower bound if range given, else null",
+      "max": "Upper bound if range given, else null"
+    },
+    "budget_band": "under-20k | 20k-50k | 50k-100k | 100k-200k | 200k-500k | over-500k | unknown",
+    "budget_flexibility": "fixed | flexible | unknown",
+    "finance_mentioned": "cash | remortgage | loan | unknown"
+  },
+  
+  "timeline": {
+    "urgency": "asap | 1-3-months | 3-6-months | 6-12-months | over-12-months | just-exploring | unknown",
+    "target_start_date": "Specific date/month if mentioned, else null",
+    "target_completion_date": "If they mentioned when they need it done by, else null",
+    "driving_factor": "Reason for timeline if mentioned (e.g., 'baby arriving', 'selling house'), else null",
+    "flexibility": "fixed-deadline | flexible | unknown"
+  },
+  
+  "qualification": {
+    "in_service_area": true | false | "borderline" | "unknown",
+    "area_match_confidence": 0-100,
+    "lead_score": 0-100,
+    "priority": "hot | warm | cool | cold",
+    "buying_stage": "ready-to-proceed | actively-comparing | researching | just-browsing | unknown",
+    "decision_maker": "yes | no | partial | unknown",
+    "blockers": ["Array of identified blockers (e.g., 'needs partner approval', 'waiting for planning')"],
+    "objections_raised": ["Array of concerns or objections mentioned"],
+    "positive_signals": ["Array of buying signals (e.g., 'mentioned specific dates', 'asked about deposit')"],
+    "competitor_mentions": ["Any other companies mentioned"],
+    "ready_for_survey": true | false,
+    "recommended_next_step": "book-survey | send-info | ross-callback | nurture | disqualify",
+    "next_step_reason": "Brief explanation of why this next step"
+  },
+  
+  "conversation_meta": {
+    "channel": "whatsapp-text | whatsapp-voice | phone-call | website | unknown",
+    "sentiment": "very-positive | positive | neutral | negative | very-negative",
+    "engagement_level": "high | medium | low",
+    "rapport_quality": "excellent | good | fair | poor",
+    "follow_up_required": true | false,
+    "follow_up_timing": "immediate | same-day | next-day | within-week | not-needed",
+    "special_notes": "Any important context not captured elsewhere"
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+SCORING GUIDELINES
+═══════════════════════════════════════════════════════════════════════════════
+
+LEAD SCORE CALCULATION (0-100):
+
+Base score: 50
+
+ADD points:
++20: In primary service area (NW3, NW6, NW11)
++15: In secondary service area (NW2, NW8, N6, N2, N10)
++15: Budget >£100k indicated
++10: Budget £50k-£100k indicated
++10: Timeline <3 months
++5: Timeline 3-6 months
++10: Asked about booking survey
++5: Asked detailed questions about process
++5: Mentioned specific requirements (shows serious thought)
++5: Positive sentiment
++5: High engagement (asked multiple questions, responsive)
+
+SUBTRACT points:
+-30: Outside service area
+-15: Budget appears <£20k for major work
+-10: Timeline >12 months
+-10: "Just looking" / very early stage
+-5: Negative sentiment
+-5: Low engagement / short responses
+-10: Major objection raised (too expensive, bad experience)
+-5: Decision maker unclear
+
+PRIORITY BANDS:
+- HOT (80-100): In area + good budget + near-term + engaged + ready
+- WARM (60-79): In area + reasonable budget + interested
+- COOL (40-59): In area + early stage OR smaller project
+- COLD (0-39): Outside area OR very low budget OR not interested
+
+═══════════════════════════════════════════════════════════════════════════════
+AREA CLASSIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+PRIMARY AREAS (full match):
+NW3 (Hampstead, Belsize Park, Primrose Hill, Swiss Cottage)
+NW6 (West Hampstead, Kilburn, Queens Park)
+NW11 (Hampstead Garden Suburb, Golders Green)
+
+SECONDARY AREAS (good match):
+NW2, NW8, N6, N2, N10
+
+BORDERLINE AREAS (needs review):
+NW1, NW4, NW7, NW9, NW10, N3, N8, N12
+
+OUTSIDE SERVICE AREA:
+All other London postcodes, non-London locations
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return ONLY valid JSON matching the schema above.
+No additional text, explanation, or markdown formatting.
+Ensure all JSON is properly formatted and parseable.
+Use null (not "null" string) for missing values.
+Use arrays [] even if empty for array fields.

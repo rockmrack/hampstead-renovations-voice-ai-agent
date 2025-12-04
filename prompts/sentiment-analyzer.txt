@@ -1,0 +1,179 @@
+Analyze the sentiment and emotional state of this customer conversation to determine if escalation or special handling is needed.
+
+═══════════════════════════════════════════════════════════════════════════════
+CONVERSATION TO ANALYZE
+═══════════════════════════════════════════════════════════════════════════════
+
+{{conversation_transcript}}
+
+═══════════════════════════════════════════════════════════════════════════════
+ANALYSIS SCHEMA
+═══════════════════════════════════════════════════════════════════════════════
+
+{
+  "overall_sentiment": {
+    "score": -1.0 to 1.0,
+    "label": "very-negative | negative | neutral | positive | very-positive",
+    "confidence": 0-100
+  },
+  
+  "emotional_indicators": {
+    "frustration": 0-100,
+    "anger": 0-100,
+    "anxiety": 0-100,
+    "enthusiasm": 0-100,
+    "confusion": 0-100,
+    "urgency": 0-100,
+    "skepticism": 0-100,
+    "satisfaction": 0-100
+  },
+  
+  "escalation_assessment": {
+    "requires_escalation": true | false,
+    "escalation_urgency": "immediate | same-day | not-required",
+    "escalation_reason": "complaint | anger | complex-technical | explicit-request | existing-client-issue | high-value-opportunity | null",
+    "escalation_notes": "Brief context for Ross if escalating"
+  },
+  
+  "communication_style": {
+    "formality": "very-formal | formal | neutral | casual | very-casual",
+    "verbosity": "very-brief | brief | normal | detailed | very-detailed",
+    "question_frequency": "many | some | few | none",
+    "engagement_quality": "highly-engaged | engaged | passive | disengaged"
+  },
+  
+  "concerns_detected": [
+    {
+      "concern": "Description of the concern",
+      "severity": "high | medium | low",
+      "addressed": true | false
+    }
+  ],
+  
+  "positive_signals": [
+    {
+      "signal": "Description of positive indicator",
+      "strength": "strong | moderate | weak"
+    }
+  ],
+  
+  "recommended_tone_adjustment": {
+    "adjust_formality": "more-formal | maintain | more-casual",
+    "adjust_pace": "slower | maintain | faster",
+    "adjust_detail": "more-detail | maintain | less-detail",
+    "specific_guidance": "Any specific advice for handling this customer"
+  },
+  
+  "risk_flags": {
+    "complaint_risk": true | false,
+    "negative_review_risk": true | false,
+    "lost_lead_risk": true | false,
+    "flag_details": "Explanation if any flags are true"
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════════
+ESCALATION TRIGGERS
+═══════════════════════════════════════════════════════════════════════════════
+
+IMMEDIATE ESCALATION (requires_escalation: true, urgency: immediate):
+- Explicit anger or hostility
+- Threat to leave negative review
+- Mention of legal action
+- Existing client with urgent site issue
+- Explicit request to speak to manager/owner
+- Complaint about ongoing work
+- Safety concerns
+
+SAME-DAY ESCALATION (requires_escalation: true, urgency: same-day):
+- Frustration that wasn't resolved
+- Complex technical questions beyond AI capability
+- Requests for significant changes to existing quotes
+- High-value opportunity (budget >£200k mentioned)
+- Referral from important contact mentioned
+- Media or press enquiry
+
+NO ESCALATION NEEDED:
+- Standard enquiries handled successfully
+- Positive sentiment throughout
+- All questions answered satisfactorily
+- Survey booked without issues
+
+═══════════════════════════════════════════════════════════════════════════════
+SENTIMENT SCORING GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+VERY NEGATIVE (-1.0 to -0.6):
+- Explicit complaints
+- Hostile language
+- Threats or ultimatums
+- Strong dissatisfaction expressed
+
+NEGATIVE (-0.6 to -0.2):
+- Frustration evident
+- Skepticism or doubt
+- Disappointment expressed
+- Pushback on pricing/process
+
+NEUTRAL (-0.2 to 0.2):
+- Factual enquiry
+- No strong emotional indicators
+- Standard information exchange
+
+POSITIVE (0.2 to 0.6):
+- Interest and engagement
+- Appreciative comments
+- Enthusiasm about project
+- Responsive to suggestions
+
+VERY POSITIVE (0.6 to 1.0):
+- Highly enthusiastic
+- Complimentary about company
+- Eager to proceed
+- Strong buying signals
+
+═══════════════════════════════════════════════════════════════════════════════
+DETECTION PATTERNS
+═══════════════════════════════════════════════════════════════════════════════
+
+FRUSTRATION INDICATORS:
+- Repeated questions
+- "I already told you..."
+- Short, curt responses
+- Sighing (in voice)
+- "This is ridiculous"
+
+ANGER INDICATORS:
+- Profanity
+- Raised voice (in voice notes/calls)
+- Accusations
+- Demands
+- Threats
+
+ANXIETY INDICATORS:
+- Many questions about guarantees
+- Asking for reassurance repeatedly
+- Mentioning past bad experiences
+- Concern about costs/overruns
+
+ENTHUSIASM INDICATORS:
+- Exclamation marks
+- "That's great!"
+- Asking about next steps
+- Discussing specifics eagerly
+- Quick responses
+
+SKEPTICISM INDICATORS:
+- "How do I know..."
+- "That seems expensive"
+- Asking for references
+- Comparing to other quotes
+- Questioning claims
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return ONLY valid JSON matching the schema above.
+No additional text or explanation.
+Ensure accurate assessment — this influences how we handle the customer.

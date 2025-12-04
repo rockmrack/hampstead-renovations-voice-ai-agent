@@ -1,0 +1,505 @@
+{
+  "name": "Lead Qualification Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-qualification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "New Lead Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.VOICE_API_URL }}/api/v1/qualify/score",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contact_phone",
+              "value": "={{ $json.phone }}"
+            },
+            {
+              "name": "conversation_history",
+              "value": "={{ JSON.stringify($json.messages) }}"
+            },
+            {
+              "name": "contact_name",
+              "value": "={{ $json.name }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "score-lead",
+      "name": "Score Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.lead_score }}",
+              "operation": "largerEqual",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "check-hot-lead",
+      "name": "Hot Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email || '' }}",
+        "additionalFields": {
+          "phone": "={{ $node['New Lead Trigger'].json.phone }}",
+          "firstname": "={{ $node['New Lead Trigger'].json.name.split(' ')[0] }}",
+          "lastname": "={{ $node['New Lead Trigger'].json.name.split(' ').slice(1).join(' ') || '' }}",
+          "lifecycleStage": "lead",
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "lead_score",
+                "value": "={{ $json.lead_score }}"
+              },
+              {
+                "property": "lead_tier",
+                "value": "={{ $json.lead_tier }}"
+              },
+              {
+                "property": "project_type",
+                "value": "={{ $json.extracted_info.project_type }}"
+              },
+              {
+                "property": "estimated_budget",
+                "value": "={{ $json.extracted_info.budget_range }}"
+              },
+              {
+                "property": "property_location",
+                "value": "={{ $json.extracted_info.postcode }}"
+              },
+              {
+                "property": "timeline",
+                "value": "={{ $json.extracted_info.timeline }}"
+              },
+              {
+                "property": "qualification_notes",
+                "value": "={{ $json.qualification_summary }}"
+              },
+              {
+                "property": "source",
+                "value": "voice_ai_agent"
+              }
+            ]
+          }
+        }
+      },
+      "id": "create-hubspot-hot",
+      "name": "Create Hot Lead",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [850, 200],
+      "credentials": {
+        "hubspotApi": {
+          "id": "hubspot-cred",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "deal",
+        "operation": "create",
+        "additionalFields": {
+          "amount": "={{ $node['Score Lead'].json.extracted_info.estimated_value || 50000 }}",
+          "dealname": "={{ $node['New Lead Trigger'].json.name }} - {{ $node['Score Lead'].json.extracted_info.project_type || 'Home Renovation' }}",
+          "dealstage": "appointmentscheduled",
+          "pipeline": "default",
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "project_description",
+                "value": "={{ $node['Score Lead'].json.extracted_info.project_description }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "create-deal",
+      "name": "Create Deal",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1050, 200],
+      "credentials": {
+        "hubspotApi": {
+          "id": "hubspot-cred",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#hot-leads",
+        "text": ":fire: *HOT LEAD ALERT*\n\n*Name:* {{ $node['New Lead Trigger'].json.name }}\n*Phone:* {{ $node['New Lead Trigger'].json.phone }}\n*Score:* {{ $node['Score Lead'].json.lead_score }}/100\n*Tier:* {{ $node['Score Lead'].json.lead_tier }}\n\n*Project:* {{ $node['Score Lead'].json.extracted_info.project_type }}\n*Budget:* {{ $node['Score Lead'].json.extracted_info.budget_range }}\n*Timeline:* {{ $node['Score Lead'].json.extracted_info.timeline }}\n*Location:* {{ $node['Score Lead'].json.extracted_info.postcode }}\n\n*Summary:*\n{{ $node['Score Lead'].json.qualification_summary }}",
+        "otherOptions": {}
+      },
+      "id": "slack-hot-lead",
+      "name": "Notify Hot Lead",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1250, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $env.SALES_TEAM_EMAIL }}",
+        "subject": "🔥 Hot Lead: {{ $node['New Lead Trigger'].json.name }} (Score: {{ $node['Score Lead'].json.lead_score }})",
+        "emailType": "html",
+        "message": "<h2>New Hot Lead from Voice AI Agent</h2>\n<table style=\"border-collapse: collapse; width: 100%;\">\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Name</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['New Lead Trigger'].json.name }}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Phone</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['New Lead Trigger'].json.phone }}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Lead Score</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['Score Lead'].json.lead_score }}/100 ({{ $node['Score Lead'].json.lead_tier }})</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Project Type</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['Score Lead'].json.extracted_info.project_type }}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Budget Range</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['Score Lead'].json.extracted_info.budget_range }}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Timeline</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['Score Lead'].json.extracted_info.timeline }}</td></tr>\n<tr><td style=\"padding: 8px; border: 1px solid #ddd;\"><strong>Location</strong></td><td style=\"padding: 8px; border: 1px solid #ddd;\">{{ $node['Score Lead'].json.extracted_info.postcode }}</td></tr>\n</table>\n<h3>Qualification Summary</h3>\n<p>{{ $node['Score Lead'].json.qualification_summary }}</p>\n<p><a href=\"https://app.hubspot.com/contacts/{{ $env.HUBSPOT_PORTAL_ID }}/contact/{{ $node['Create Hot Lead'].json.id }}\">View in HubSpot</a></p>",
+        "options": {}
+      },
+      "id": "email-sales",
+      "name": "Email Sales Team",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [1450, 200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-cred",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email || '' }}",
+        "additionalFields": {
+          "phone": "={{ $node['New Lead Trigger'].json.phone }}",
+          "firstname": "={{ $node['New Lead Trigger'].json.name.split(' ')[0] }}",
+          "lifecycleStage": "subscriber",
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "lead_score",
+                "value": "={{ $node['Score Lead'].json.lead_score }}"
+              },
+              {
+                "property": "lead_tier",
+                "value": "={{ $node['Score Lead'].json.lead_tier }}"
+              },
+              {
+                "property": "source",
+                "value": "voice_ai_agent"
+              }
+            ]
+          }
+        }
+      },
+      "id": "create-hubspot-warm",
+      "name": "Create Warm Lead",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [850, 400],
+      "credentials": {
+        "hubspotApi": {
+          "id": "hubspot-cred",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $node['Score Lead'].json.lead_score }}",
+              "operation": "largerEqual",
+              "value2": 40
+            }
+          ]
+        }
+      },
+      "id": "check-warm-lead",
+      "name": "Warm Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "listId": "={{ $env.NURTURE_LIST_ID }}",
+        "email": "={{ $node['Score Lead'].json.email }}"
+      },
+      "id": "add-to-nurture",
+      "name": "Add to Nurture",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1250, 350],
+      "credentials": {
+        "hubspotApi": {
+          "id": "hubspot-cred",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "#leads",
+        "text": ":seedling: *Warm Lead*\n\n*Name:* {{ $node['New Lead Trigger'].json.name }}\n*Phone:* {{ $node['New Lead Trigger'].json.phone }}\n*Score:* {{ $node['Score Lead'].json.lead_score }}/100\n\nAdded to nurture sequence.",
+        "otherOptions": {}
+      },
+      "id": "slack-warm-lead",
+      "name": "Log Warm Lead",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1450, 350],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "create",
+        "additionalFields": {
+          "phone": "={{ $node['New Lead Trigger'].json.phone }}",
+          "firstname": "={{ $node['New Lead Trigger'].json.name.split(' ')[0] }}",
+          "lifecycleStage": "other",
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "lead_score",
+                "value": "={{ $node['Score Lead'].json.lead_score }}"
+              },
+              {
+                "property": "lead_tier",
+                "value": "cold"
+              },
+              {
+                "property": "disqualification_reason",
+                "value": "={{ $node['Score Lead'].json.disqualification_reasons.join(', ') }}"
+              },
+              {
+                "property": "source",
+                "value": "voice_ai_agent"
+              }
+            ]
+          }
+        }
+      },
+      "id": "create-hubspot-cold",
+      "name": "Log Cold Lead",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [1250, 500],
+      "credentials": {
+        "hubspotApi": {
+          "id": "hubspot-cred",
+          "name": "HubSpot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'processed', lead_score: $node['Score Lead'].json.lead_score, lead_tier: $node['Score Lead'].json.lead_tier }) }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "New Lead Trigger": {
+      "main": [
+        [
+          {
+            "node": "Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Hot Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hot Lead?": {
+      "main": [
+        [
+          {
+            "node": "Create Hot Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Warm Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Hot Lead": {
+      "main": [
+        [
+          {
+            "node": "Create Deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Deal": {
+      "main": [
+        [
+          {
+            "node": "Notify Hot Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Hot Lead": {
+      "main": [
+        [
+          {
+            "node": "Email Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Sales Team": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Warm Lead": {
+      "main": [
+        [
+          {
+            "node": "Warm Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Warm Lead?": {
+      "main": [
+        [
+          {
+            "node": "Add to Nurture",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Cold Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Nurture": {
+      "main": [
+        [
+          {
+            "node": "Log Warm Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Warm Lead": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Cold Lead": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Lead Management"
+    },
+    {
+      "name": "CRM"
+    },
+    {
+      "name": "Production"
+    }
+  ]
+}

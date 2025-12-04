@@ -1,0 +1,146 @@
+{
+  "primary_voice": {
+    "voice_id": "EXAVITQu4vr4xnSDxMaL",
+    "voice_name": "Sarah",
+    "description": "Professional British female voice - warm, friendly, and articulate",
+    "provider": "elevenlabs",
+    "language": "en-GB",
+    "settings": {
+      "stability": 0.5,
+      "similarity_boost": 0.75,
+      "style": 0.3,
+      "use_speaker_boost": true
+    }
+  },
+  "fallback_voice": {
+    "voice_id": "pNInz6obpgDQGcFmaJgB",
+    "voice_name": "Adam",
+    "description": "Professional British male voice - clear and trustworthy",
+    "settings": {
+      "stability": 0.5,
+      "similarity_boost": 0.75,
+      "style": 0.25,
+      "use_speaker_boost": true
+    }
+  },
+  "model_config": {
+    "model_id": "eleven_turbo_v2_5",
+    "description": "Low-latency model optimized for real-time applications",
+    "latency_optimization": true,
+    "fallback_model": "eleven_monolingual_v1"
+  },
+  "output_settings": {
+    "format": "mp3_44100_128",
+    "sample_rate": 44100,
+    "bitrate": 128,
+    "alternative_formats": {
+      "whatsapp": "mp3_44100_128",
+      "phone": "pcm_16000",
+      "web": "mp3_44100_192"
+    }
+  },
+  "pronunciation_dictionary": {
+    "custom_pronunciations": {
+      "NW3": {
+        "phonetic": "ˈɛn ˈdʌbəljuː ˈθriː",
+        "display": "N W 3"
+      },
+      "NW6": {
+        "phonetic": "ˈɛn ˈdʌbəljuː ˈsɪks",
+        "display": "N W 6"
+      },
+      "NW11": {
+        "phonetic": "ˈɛn ˈdʌbəljuː ɪˈlɛvən",
+        "display": "N W 11"
+      },
+      "NW2": {
+        "phonetic": "ˈɛn ˈdʌbəljuː ˈtuː",
+        "display": "N W 2"
+      },
+      "NW8": {
+        "phonetic": "ˈɛn ˈdʌbəljuː ˈeɪt",
+        "display": "N W 8"
+      },
+      "Hampstead": {
+        "phonetic": "ˈhæmpstɪd",
+        "display": "Hampstead"
+      },
+      "Belsize": {
+        "phonetic": "ˈbɛlsaɪz",
+        "display": "Belsize"
+      },
+      "en-suite": {
+        "phonetic": "ɒn ˈswiːt",
+        "display": "en suite"
+      },
+      "Primrose": {
+        "phonetic": "ˈprɪmrəʊz",
+        "display": "Primrose"
+      },
+      "Golders": {
+        "phonetic": "ˈɡəʊldəz",
+        "display": "Golders"
+      },
+      "Highgate": {
+        "phonetic": "ˈhaɪɡeɪt",
+        "display": "Highgate"
+      },
+      "Muswell": {
+        "phonetic": "ˈmʌzwɛl",
+        "display": "Muswell"
+      },
+      "Finchley": {
+        "phonetic": "ˈfɪntʃli",
+        "display": "Finchley"
+      },
+      "sqm": {
+        "phonetic": "ˈskwɛə ˈmiːtəz",
+        "display": "square metres"
+      }
+    }
+  },
+  "audio_processing": {
+    "normalize_audio": true,
+    "target_loudness_lufs": -16,
+    "remove_silence": {
+      "enabled": true,
+      "threshold_db": -40,
+      "min_silence_duration_ms": 500
+    },
+    "fade_in_ms": 50,
+    "fade_out_ms": 100
+  },
+  "rate_limits": {
+    "max_characters_per_request": 5000,
+    "max_requests_per_minute": 50,
+    "max_concurrent_requests": 10
+  },
+  "caching": {
+    "enabled": true,
+    "cache_common_phrases": true,
+    "common_phrases": [
+      "Good morning, Hampstead Renovations, how can I help you?",
+      "Good afternoon, Hampstead Renovations, how can I help you?",
+      "Thanks for calling Hampstead Renovations. Have a great day!",
+      "Let me check Ross's availability for you.",
+      "You'll receive a WhatsApp confirmation shortly.",
+      "Would you like to book a free site visit?"
+    ],
+    "cache_ttl_hours": 168
+  },
+  "error_handling": {
+    "fallback_on_error": true,
+    "max_retries": 3,
+    "retry_delay_ms": 1000,
+    "timeout_ms": 30000,
+    "fallback_message": "I apologize, I'm having a technical issue. Could you please repeat that, or would you like me to have Ross call you back?"
+  },
+  "quality_assurance": {
+    "log_all_generations": true,
+    "sample_rate_for_review": 0.1,
+    "flag_unusual_length": {
+      "min_chars": 50,
+      "max_chars": 800
+    }
+  }
+}

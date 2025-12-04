@@ -1,0 +1,256 @@
+{
+  "assistant": {
+    "name": "Hampstead Renovations Assistant",
+    "description": "AI phone assistant for Hampstead Renovations - handles enquiries, qualifies leads, and books surveys",
+    "first_message": "Good morning, Hampstead Renovations, how can I help you?",
+    "first_message_mode": "assistant-speaks-first"
+  },
+  "model": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-5-20250514",
+    "temperature": 0.7,
+    "max_tokens": 500,
+    "system_prompt_file": "prompts/phone-call-agent.txt",
+    "knowledge_base_dir": "knowledge-base/"
+  },
+  "voice": {
+    "provider": "11labs",
+    "voice_id": "EXAVITQu4vr4xnSDxMaL",
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "style": 0.3,
+    "speed": 1.0,
+    "fallback_voice_id": "pNInz6obpgDQGcFmaJgB"
+  },
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en-GB",
+    "smart_format": true,
+    "punctuate": true,
+    "profanity_filter": false,
+    "redact": false,
+    "diarize": false,
+    "interim_results": true,
+    "endpointing": 300,
+    "utterance_end_ms": 1000
+  },
+  "conversation": {
+    "silence_timeout_seconds": 30,
+    "max_duration_seconds": 1800,
+    "response_delay_ms": 500,
+    "interruption_threshold": 100,
+    "end_call_phrases": [
+      "goodbye",
+      "bye",
+      "bye bye",
+      "bye now",
+      "thanks bye",
+      "thank you bye",
+      "cheers bye",
+      "take care",
+      "have a good day"
+    ],
+    "backchanneling": {
+      "enabled": true,
+      "phrases": ["mm-hmm", "right", "okay", "I see", "got it"],
+      "frequency": "natural"
+    }
+  },
+  "audio": {
+    "background_sound": "off",
+    "background_denoising_enabled": true,
+    "echo_cancellation": true,
+    "noise_suppression": true,
+    "auto_gain_control": true,
+    "vad_enabled": true,
+    "vad_threshold": 0.5
+  },
+  "functions": [
+    {
+      "name": "check_availability",
+      "description": "Check Ross's calendar for available survey slots on a specific date",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "The date to check availability for, in YYYY-MM-DD format"
+          },
+          "time_preference": {
+            "type": "string",
+            "enum": ["morning", "afternoon", "any"],
+            "description": "Preferred time of day"
+          }
+        },
+        "required": ["date"]
+      },
+      "server_url": "{{API_BASE_URL}}/vapi/check-availability"
+    },
+    {
+      "name": "book_survey",
+      "description": "Book a site survey for a potential client",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Customer's full name"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer's phone number"
+          },
+          "email": {
+            "type": "string",
+            "description": "Customer's email address (optional)"
+          },
+          "address": {
+            "type": "string",
+            "description": "Full property address for the survey"
+          },
+          "postcode": {
+            "type": "string",
+            "description": "Property postcode"
+          },
+          "date": {
+            "type": "string",
+            "description": "Survey date in YYYY-MM-DD format"
+          },
+          "time": {
+            "type": "string",
+            "description": "Survey time in HH:MM format (24hr)"
+          },
+          "project_type": {
+            "type": "string",
+            "description": "Type of project the customer is interested in"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Any additional notes about the enquiry"
+          }
+        },
+        "required": ["name", "phone", "address", "date", "time"]
+      },
+      "server_url": "{{API_BASE_URL}}/vapi/book-survey"
+    },
+    {
+      "name": "get_pricing",
+      "description": "Get pricing guidance for a specific project type",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "service_type": {
+            "type": "string",
+            "enum": [
+              "kitchen-extension",
+              "loft-conversion",
+              "bathroom",
+              "full-renovation",
+              "basement",
+              "maintenance"
+            ],
+            "description": "Type of renovation service"
+          },
+          "size": {
+            "type": "string",
+            "enum": ["small", "medium", "large"],
+            "description": "Approximate size of the project"
+          },
+          "property_type": {
+            "type": "string",
+            "enum": ["flat", "terraced", "semi-detached", "detached"],
+            "description": "Type of property"
+          },
+          "area": {
+            "type": "string",
+            "description": "Area or postcode of the property"
+          }
+        },
+        "required": ["service_type"]
+      },
+      "server_url": "{{API_BASE_URL}}/vapi/get-pricing"
+    },
+    {
+      "name": "transfer_to_human",
+      "description": "Transfer the call to Ross or arrange a callback",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason for the transfer or callback"
+          },
+          "urgency": {
+            "type": "string",
+            "enum": ["immediate", "same-day", "next-business-day"],
+            "description": "How urgently the callback is needed"
+          },
+          "customer_phone": {
+            "type": "string",
+            "description": "Customer's phone number for callback"
+          },
+          "preferred_time": {
+            "type": "string",
+            "description": "Customer's preferred callback time"
+          }
+        },
+        "required": ["reason"]
+      },
+      "server_url": "{{API_BASE_URL}}/vapi/transfer"
+    },
+    {
+      "name": "check_service_area",
+      "description": "Check if a location is within our service area",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "postcode": {
+            "type": "string",
+            "description": "Postcode to check"
+          },
+          "area_name": {
+            "type": "string",
+            "description": "Area name if postcode not available"
+          }
+        }
+      },
+      "server_url": "{{API_BASE_URL}}/vapi/check-area"
+    }
+  ],
+  "webhooks": {
+    "server_url": "{{API_BASE_URL}}/vapi/webhook",
+    "server_url_secret": "{{VAPI_WEBHOOK_SECRET}}",
+    "events": [
+      "assistant-request",
+      "function-call",
+      "transcript",
+      "hang",
+      "speech-update",
+      "end-of-call-report",
+      "status-update"
+    ]
+  },
+  "analytics": {
+    "enabled": true,
+    "track_metrics": [
+      "call_duration",
+      "sentiment_score",
+      "booking_conversion",
+      "transfer_rate",
+      "customer_satisfaction"
+    ]
+  },
+  "compliance": {
+    "recording_consent_required": false,
+    "recording_consent_message": null,
+    "gdpr_compliant": true,
+    "data_retention_days": 90
+  },
+  "error_handling": {
+    "on_error": "apologize-and-offer-callback",
+    "error_message": "I apologize, I'm having a technical difficulty. Can I have Ross call you back shortly?",
+    "max_consecutive_errors": 3,
+    "fallback_action": "transfer_to_human"
+  }
+}
