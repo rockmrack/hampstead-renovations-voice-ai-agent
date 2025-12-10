@@ -7,6 +7,7 @@ from datetime import datetime
 
 import structlog
 from config import settings
+from models.conversation import SentimentAnalysis  # noqa: I001
 from redis import asyncio as aioredis
 
 logger = structlog.get_logger(__name__)
@@ -248,6 +249,302 @@ class ConversationService:
         except Exception as e:
             logger.error("conversation_stats_error", error=str(e))
             return {"active_whatsapp": 0, "active_phone": 0, "total_active": 0}
+
+    async def analyse_sentiment(
+        self,
+        message: str,
+        conversation_history: list[dict] | None = None,  # noqa: ARG002 - Reserved for context-aware analysis
+    ) -> SentimentAnalysis:
+        """
+        Analyse customer sentiment from latest message.
+
+        Args:
+            message: Latest customer message
+            conversation_history: Recent conversation messages (reserved for future use)
+
+        Returns:
+            SentimentAnalysis with sentiment and signals
+        """
+        message_lower = message.lower()
+
+        # Price shock indicators
+        price_shock_signals = [
+            "how much?!",
+            "that much",
+            "that's expensive",
+            "can't afford",
+            "out of my budget",
+            "way more than",
+            "wasn't expecting",
+            "seriously?",
+            "you're joking",
+        ]
+        if any(signal in message_lower for signal in price_shock_signals):
+            return SentimentAnalysis(
+                sentiment="price_shocked",
+                confidence=0.8,
+                signals=["price_reaction_detected"],
+                requires_review=True,
+            )
+
+        # Frustration/anger indicators
+        frustration_signals = [
+            "frustrated",
+            "annoying",
+            "ridiculous",
+            "waste of time",
+            "not helpful",
+            "useless",
+            "terrible",
+            "awful",
+            "pathetic",
+        ]
+        if any(signal in message_lower for signal in frustration_signals):
+            return SentimentAnalysis(
+                sentiment="frustrated",
+                confidence=0.85,
+                signals=["frustration_keywords"],
+                requires_review=True,
+            )
+
+        # Anger escalation
+        anger_signals = [
+            "furious",
+            "disgusted",
+            "appalled",
+            "sue",
+            "lawyer",
+            "report you",
+        ]
+        if any(signal in message_lower for signal in anger_signals):
+            return SentimentAnalysis(
+                sentiment="angry",
+                confidence=0.9,
+                signals=["anger_escalation"],
+                requires_review=True,
+            )
+
+        # Positive indicators
+        positive_signals = [
+            "thank you",
+            "thanks",
+            "great",
+            "excellent",
+            "perfect",
+            "brilliant",
+            "wonderful",
+            "amazing",
+            "love it",
+            "sounds good",
+        ]
+        if any(signal in message_lower for signal in positive_signals):
+            return SentimentAnalysis(
+                sentiment="positive",
+                confidence=0.75,
+                signals=["positive_language"],
+                requires_review=False,
+            )
+
+        # Concerned indicators
+        concerned_signals = [
+            "worried",
+            "concerned",
+            "not sure",
+            "hesitant",
+            "nervous",
+            "uncertain",
+        ]
+        if any(signal in message_lower for signal in concerned_signals):
+            return SentimentAnalysis(
+                sentiment="concerned",
+                confidence=0.7,
+                signals=["concern_detected"],
+                requires_review=False,
+            )
+
+        # Default to neutral
+        return SentimentAnalysis(
+            sentiment="neutral",
+            confidence=0.5,
+            signals=[],
+            requires_review=False,
+        )
+
+    async def flag_for_review(
+        self,
+        conversation_id: str,
+        phone: str,
+        sentiment_analysis: SentimentAnalysis,
+        customer_name: str | None = None,
+    ) -> str:
+        """
+        Flag a conversation for manual review.
+
+        Args:
+            conversation_id: Unique conversation identifier
+            phone: Customer phone number
+            sentiment_analysis: Sentiment analysis result
+            customer_name: Optional customer name
+
+        Returns:
+            Flag ID
+        """
+        import uuid
+
+        redis = await self._get_redis()
+        flag_id = str(uuid.uuid4())[:8]
+
+        # Determine urgency based on sentiment
+        urgency_map = {
+            "angry": "urgent",
+            "frustrated": "high",
+            "price_shocked": "high",
+            "concerned": "normal",
+        }
+        urgency = urgency_map.get(sentiment_analysis.sentiment, "normal")
+
+        flag_data = {
+            "conversation_id": conversation_id,
+            "phone": phone,
+            "customer_name": customer_name or "Unknown",
+            "flag_reason": f"Sentiment: {sentiment_analysis.sentiment}",
+            "sentiment": sentiment_analysis.sentiment,
+            "signals": ",".join(sentiment_analysis.signals),
+            "confidence": str(sentiment_analysis.confidence),
+            "urgency": urgency,
+            "created_at": datetime.utcnow().isoformat(),
+            "reviewed": "false",
+        }
+
+        await redis.hset(f"flag:{flag_id}", mapping=flag_data)
+        await redis.expire(f"flag:{flag_id}", 86400 * 7)  # Keep for 7 days
+
+        # Add to flags list for easy retrieval
+        await redis.lpush("flags:pending", flag_id)
+        await redis.ltrim("flags:pending", 0, 99)  # Keep last 100 flags
+
+        logger.info(
+            "conversation_flagged",
+            flag_id=flag_id,
+            phone=phone,
+            sentiment=sentiment_analysis.sentiment,
+            urgency=urgency,
+        )
+
+        return flag_id
+
+    async def get_pending_flags(self, limit: int = 20) -> list[dict]:
+        """
+        Get list of pending review flags.
+
+        Args:
+            limit: Maximum flags to return
+
+        Returns:
+            List of flag dictionaries
+        """
+        try:
+            redis = await self._get_redis()
+            flag_ids = await redis.lrange("flags:pending", 0, limit - 1)
+
+            flags = []
+            for flag_id in flag_ids:
+                flag_data = await redis.hgetall(f"flag:{flag_id}")
+                if flag_data and flag_data.get("reviewed") == "false":
+                    flag_data["id"] = flag_id
+                    flags.append(flag_data)
+
+            return flags
+
+        except Exception as e:
+            logger.error("get_pending_flags_error", error=str(e))
+            return []
+
+    async def mark_flag_reviewed(self, flag_id: str, notes: str | None = None) -> bool:
+        """
+        Mark a flag as reviewed.
+
+        Args:
+            flag_id: Flag ID to mark
+            notes: Optional review notes
+
+        Returns:
+            True if successfully marked
+        """
+        try:
+            redis = await self._get_redis()
+            key = f"flag:{flag_id}"
+
+            exists = await redis.exists(key)
+            if not exists:
+                return False
+
+            updates = {
+                "reviewed": "true",
+                "reviewed_at": datetime.utcnow().isoformat(),
+            }
+            if notes:
+                updates["notes"] = notes
+
+            await redis.hset(key, mapping=updates)
+
+            logger.info("flag_marked_reviewed", flag_id=flag_id)
+            return True
+
+        except Exception as e:
+            logger.error("mark_flag_reviewed_error", error=str(e), flag_id=flag_id)
+            return False
+
+    async def get_full_transcript(
+        self,
+        phone: str,
+        channel: str = "whatsapp",
+    ) -> list[dict]:
+        """
+        Get full conversation transcript as structured list.
+
+        Args:
+            phone: Customer phone number
+            channel: Communication channel
+
+        Returns:
+            List of message dicts with role and content
+        """
+        try:
+            redis = await self._get_redis()
+            key = self._get_conversation_key(phone, channel)
+
+            messages = await redis.lrange(key, 0, -1)
+
+            transcript = []
+            for msg in reversed(messages):
+                # Parse formatted message: [HH:MM] Role: Content
+                if "] " in msg and ": " in msg:
+                    role_content = msg.split("] ", 1)[1]
+                    if ": " in role_content:
+                        role, content = role_content.split(": ", 1)
+                        transcript.append(
+                            {
+                                "role": role.lower(),
+                                "content": content,
+                            }
+                        )
+
+            return transcript
+
+        except Exception as e:
+            logger.error("get_full_transcript_error", error=str(e), phone=phone)
+            return []
+
+    async def set_status(self, phone: str, status: str) -> None:
+        """
+        Set conversation status.
+
+        Args:
+            phone: Customer phone number
+            status: Status string (active, pending_handoff, closed, etc.)
+        """
+        await self.update_context(phone, {"status": status})
 
 
 # Singleton instance

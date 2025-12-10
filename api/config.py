@@ -96,11 +96,21 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = None
     sentry_traces_sample_rate: float = 0.1
 
+    # Email (SendGrid)
+    sendgrid_api_key: str | None = None
+
+    # EPC API for property data
+    epc_api_key: str | None = None
+
     # Feature Flags
     enable_voice_notes: bool = True
     enable_phone_calls: bool = True
     enable_sentiment_analysis: bool = True
     enable_conversation_memory: bool = True
+    enable_photo_analysis: bool = True
+    enable_auto_followups: bool = True
+    enable_appointment_reminders: bool = True
+    enable_postcode_enrichment: bool = True
 
     # Business Configuration
     business_name: str = "Hampstead Renovations"

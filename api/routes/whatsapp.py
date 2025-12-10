@@ -1,6 +1,6 @@
 """
 WhatsApp message handling routes.
-Handles incoming text messages and voice notes via 360dialog webhook.
+Handles incoming text messages, voice notes, and images via 360dialog webhook.
 """
 
 import structlog
@@ -13,6 +13,7 @@ from services.deepgram_service import deepgram_service
 from services.elevenlabs_service import elevenlabs_service
 from services.hubspot_service import hubspot_service
 from services.notification_service import notification_service
+from services.vision_service import vision_service
 from services.whatsapp_service import whatsapp_service
 
 logger = structlog.get_logger(__name__)
@@ -44,15 +45,19 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks) 
 
     for message in messages:
         try:
+            msg_type = message.get("type", "text")
+
             # Parse incoming message
             msg = WhatsAppMessage(
                 message_id=message.get("id"),
                 from_number=message.get("from"),
-                message_type=message.get("type"),
-                text=message.get("text", {}).get("body") if message.get("type") == "text" else None,
-                audio_id=message.get("audio", {}).get("id")
-                if message.get("type") == "audio"
-                else None,
+                message_type=msg_type,
+                text=message.get("text", {}).get("body") if msg_type == "text" else None,
+                audio_id=message.get("audio", {}).get("id") if msg_type == "audio" else None,
+                image_id=message.get("image", {}).get("id") if msg_type == "image" else None,
+                caption=message.get("image", {}).get("caption")
+                if msg_type == "image"
+                else message.get("audio", {}).get("caption"),
                 contact_name=contacts[0].get("profile", {}).get("name") if contacts else None,
                 timestamp=message.get("timestamp"),
             )
@@ -100,11 +105,15 @@ async def process_whatsapp_message(msg: WhatsAppMessage) -> None:
             audio_url = await elevenlabs_service.generate_voice_note(response)
             await whatsapp_service.send_audio_message(msg.from_number, audio_url)
 
+        elif msg.message_type == "image":
+            response = await handle_image_message(msg, history)
+            await whatsapp_service.send_text_message(msg.from_number, response)
+
         else:
             # Unsupported message type - send text acknowledgment
             response = (
-                "Thanks for your message! I can best help you with text messages "
-                "or voice notes. How can I help you today?"
+                "Thanks for your message! I can best help you with text messages, "
+                "voice notes, or photos. How can I help you today?"
             )
             await whatsapp_service.send_text_message(msg.from_number, response)
 
@@ -198,6 +207,60 @@ async def handle_voice_note(msg: WhatsAppMessage, history: str) -> str:
     except Exception as e:
         logger.error("voice_note_handler_error", error=str(e))
         raise
+
+
+async def handle_image_message(msg: WhatsAppMessage, history: str) -> str:
+    """Analyse property image and generate helpful response."""
+    try:
+        # Get image ID from message
+        image_id = msg.image_id
+        if not image_id:
+            return (
+                "Thanks for the photo! Unfortunately I couldn't process it. "
+                "Could you try sending it again?"
+            )
+
+        # Download image from WhatsApp
+        image_data = await whatsapp_service.download_media(image_id)
+        logger.info("image_downloaded", size=len(image_data))
+
+        # Analyse image using Claude Vision
+        analysis = await vision_service.analyse_property_image(
+            image_bytes=image_data,
+            mime_type="image/jpeg",
+            conversation_context=history,
+        )
+
+        # Generate conversational response from analysis
+        response = vision_service.generate_response(analysis)
+
+        # Store analysis with lead for future reference
+        await conversation_service.update_context(
+            msg.from_number,
+            {
+                "property_type": analysis.property_type or "",
+                "room_type": analysis.room_type or "",
+                "renovation_complexity": analysis.renovation_complexity,
+                "last_image_analysis": "true",
+            },
+        )
+
+        logger.info(
+            "image_analysis_complete",
+            phone=msg.from_number,
+            property_type=analysis.property_type,
+            complexity=analysis.renovation_complexity,
+        )
+
+        return response
+
+    except Exception as e:
+        logger.error("image_message_handler_error", error=str(e))
+        return (
+            "Thanks for sharing that photo! I had a bit of trouble analysing it, "
+            "but I'd love to help with your project. Could you tell me a bit more "
+            "about what you're looking to do?"
+        )
 
 
 async def update_lead_qualification(

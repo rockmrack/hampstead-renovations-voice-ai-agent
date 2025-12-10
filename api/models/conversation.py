@@ -69,10 +69,14 @@ class WhatsAppMessage(BaseModel):
     from_number: str = Field(..., alias="from", description="Sender phone number")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     type: MessageType = MessageType.TEXT
+    message_type: str | None = None  # String version for routing
     text: str | None = None
     audio_url: str | None = None
     audio_id: str | None = None
+    image_id: str | None = None
+    image_url: str | None = None
     caption: str | None = None
+    contact_name: str | None = None
 
     class Config:
         populate_by_name = True
@@ -339,3 +343,121 @@ class ErrorResponse(BaseModel):
     message: str
     request_id: str | None = None
     details: dict | None = None
+
+
+# ============================================
+# Image Analysis Models
+# ============================================
+
+
+class ImageAnalysis(BaseModel):
+    """Property image analysis result from Claude Vision."""
+
+    property_type: str | None = Field(
+        None, description="E.g., victorian_terrace, semi_detached, flat"
+    )
+    room_type: str | None = Field(None, description="E.g., kitchen, bathroom, loft, basement")
+    current_condition: str | None = Field(None, description="E.g., dated, good, poor, gutted")
+    estimated_sqm: int | None = Field(None, description="Estimated room size in square metres")
+    notable_features: list[str] = Field(
+        default_factory=list, description="Period features, structural walls, skylights, etc."
+    )
+    renovation_complexity: str = Field(
+        "unknown", description="Complexity rating: low, medium, high, unknown"
+    )
+    cost_indicators: str = Field("", description="Natural language summary of cost factors")
+    suggested_questions: list[str] = Field(
+        default_factory=list, description="Follow-up questions to ask the customer"
+    )
+
+
+# ============================================
+# Summary Models
+# ============================================
+
+
+class ConversationSummary(BaseModel):
+    """Post-conversation summary for email notification."""
+
+    customer_name: str | None = None
+    phone_or_contact: str
+    project_type: str | None = None
+    budget_signals: str | None = None
+    key_objections: list[str] = Field(default_factory=list)
+    sentiment: str = "neutral"
+    next_action: str = "No action required"
+    hot_lead: bool = False
+    summary_text: str = ""
+
+
+# ============================================
+# Handoff Models
+# ============================================
+
+
+class HandoffReason(str, Enum):
+    """Reasons for escalating to human."""
+
+    HIGH_VALUE = "high_value_project"
+    EXPLICIT_REQUEST = "customer_requested_ross"
+    NEGATIVE_SENTIMENT = "negative_sentiment"
+    COMPLEX_PLANNING = "complex_planning_question"
+    COMPLAINT = "complaint"
+    COMPETITOR_MENTION = "competitor_comparison"
+
+
+class HandoffDecision(BaseModel):
+    """Decision about whether to hand off conversation to human."""
+
+    should_handoff: bool = False
+    reason: HandoffReason | None = None
+    urgency: str = "next_available"  # immediate, same_day, next_available
+    context_for_ross: str = ""
+
+
+# ============================================
+# Property Enrichment Models
+# ============================================
+
+
+class PropertyData(BaseModel):
+    """Property data from EPC and postcode lookup."""
+
+    postcode: str | None = None
+    property_type: str | None = Field(None, description="Detached, Semi-Detached, Terraced, Flat")
+    built_form: str | None = None
+    total_floor_area_sqm: float | None = None
+    construction_age: str | None = None
+    current_energy_rating: str | None = None
+    potential_energy_rating: str | None = None
+    estimated_value: int | None = None
+    local_authority: str | None = None
+
+
+# ============================================
+# Sentiment Tracking Models
+# ============================================
+
+
+class SentimentAnalysis(BaseModel):
+    """Detailed sentiment analysis result."""
+
+    sentiment: str = "neutral"  # positive, neutral, concerned, frustrated, price_shocked, angry
+    confidence: float = 0.5
+    signals: list[str] = Field(default_factory=list)
+    requires_review: bool = False
+
+
+class ConversationFlag(BaseModel):
+    """Flag for conversations requiring review."""
+
+    conversation_id: str
+    phone: str
+    customer_name: str | None = None
+    flag_reason: str
+    sentiment: str
+    urgency: str = "normal"  # normal, high, urgent
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    reviewed: bool = False
+    reviewed_at: datetime | None = None
+    notes: str | None = None
