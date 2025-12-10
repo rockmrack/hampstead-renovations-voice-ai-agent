@@ -3,14 +3,10 @@ ElevenLabs text-to-speech service.
 Handles voice synthesis with Sarah voice optimized for British accent.
 """
 
-import io
-from typing import Optional
-
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +20,7 @@ class ElevenLabsService:
         # Sarah voice - warm, professional British female
         self.default_voice_id = "EXAVITQu4vr4xnSDxMaL"
         self.default_model = "eleven_turbo_v2_5"
-        
+
         # Voice settings optimized for clarity
         self.voice_settings = {
             "stability": 0.71,
@@ -47,19 +43,19 @@ class ElevenLabsService:
     async def synthesize(
         self,
         text: str,
-        voice_id: Optional[str] = None,
-        model_id: Optional[str] = None,
+        voice_id: str | None = None,
+        model_id: str | None = None,
         output_format: str = "mp3_44100_128",
     ) -> bytes:
         """
         Synthesize speech from text.
-        
+
         Args:
             text: Text to convert to speech
             voice_id: ElevenLabs voice ID (default: Sarah)
             model_id: Model to use (default: turbo v2.5)
             output_format: Audio format (mp3_44100_128, pcm_16000, etc.)
-            
+
         Returns:
             Audio bytes
         """
@@ -67,9 +63,9 @@ class ElevenLabsService:
         model_id = model_id or self.default_model
 
         url = f"{self.base_url}/text-to-speech/{voice_id}"
-        
+
         params = {"output_format": output_format}
-        
+
         payload = {
             "text": text,
             "model_id": model_id,
@@ -116,17 +112,17 @@ class ElevenLabsService:
     async def synthesize_with_timestamps(
         self,
         text: str,
-        voice_id: Optional[str] = None,
+        voice_id: str | None = None,
     ) -> dict:
         """
         Synthesize speech with word-level timestamps.
-        
+
         Useful for syncing audio with visual elements.
         """
         voice_id = voice_id or self.default_voice_id
-        
+
         url = f"{self.base_url}/text-to-speech/{voice_id}/with-timestamps"
-        
+
         payload = {
             "text": text,
             "model_id": self.default_model,
@@ -150,29 +146,30 @@ class ElevenLabsService:
     async def generate_voice_note(self, text: str) -> str:
         """
         Generate a voice note and return URL.
-        
+
         This uploads the audio to S3 and returns a public URL
         that can be sent via WhatsApp.
         """
         # Import here to avoid circular dependency
         from services.storage_service import storage_service
-        
+
         # Generate audio
         audio_data = await self.synthesize(text, output_format="mp3_44100_128")
-        
+
         # Upload to S3 and get URL
         import uuid
+
         filename = f"voice-notes/{uuid.uuid4()}.mp3"
         url = await storage_service.upload_audio(audio_data, filename)
-        
+
         logger.info("voice_note_generated", url=url, size=len(audio_data))
-        
+
         return url
 
     async def get_voices(self) -> list[dict]:
         """Get list of available voices."""
         url = f"{self.base_url}/voices"
-        
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self._get_headers())
@@ -186,7 +183,7 @@ class ElevenLabsService:
     async def get_voice_settings(self, voice_id: str) -> dict:
         """Get settings for a specific voice."""
         url = f"{self.base_url}/voices/{voice_id}/settings"
-        
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self._get_headers())
@@ -199,7 +196,7 @@ class ElevenLabsService:
     async def get_user_info(self) -> dict:
         """Get current user/subscription info."""
         url = f"{self.base_url}/user"
-        
+
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(url, headers=self._get_headers())

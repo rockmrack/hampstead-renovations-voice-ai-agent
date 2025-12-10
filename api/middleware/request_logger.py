@@ -5,13 +5,12 @@ Logs all incoming requests with timing and context.
 
 import time
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
+import structlog
+from config import settings
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-import structlog
-
-from config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +18,7 @@ logger = structlog.get_logger(__name__)
 class RequestLoggerMiddleware(BaseHTTPMiddleware):
     """
     Request/response logging middleware.
-    
+
     Adds:
     - Request ID tracking
     - Request timing metrics
@@ -45,7 +44,7 @@ class RequestLoggerMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
-        
+
         # Skip logging for health checks and static paths
         if any(path.startswith(skip) for skip in self.skip_paths):
             return await call_next(request)
@@ -83,7 +82,7 @@ class RequestLoggerMiddleware(BaseHTTPMiddleware):
         try:
             # Process request
             response = await call_next(request)
-            
+
             # Calculate duration
             duration_ms = (time.time() - start_time) * 1000
 
@@ -115,20 +114,18 @@ class RequestLoggerMiddleware(BaseHTTPMiddleware):
 
         finally:
             # Clear context vars
-            structlog.contextvars.unbind_contextvars(
-                "request_id", "path", "method"
-            )
+            structlog.contextvars.unbind_contextvars("request_id", "path", "method")
 
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP from request."""
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             return forwarded.split(",")[0].strip()
-        
+
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
             return real_ip
-            
+
         return request.client.host if request.client else "unknown"
 
 

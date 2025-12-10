@@ -3,14 +3,10 @@ Deepgram speech-to-text service.
 Handles audio transcription with Nova-2 model optimized for UK English.
 """
 
-import io
-from typing import Optional
-
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -48,22 +44,22 @@ class DeepgramService:
         self,
         audio_data: bytes,
         content_type: str = "audio/ogg",
-        options: Optional[dict] = None,
+        options: dict | None = None,
     ) -> str:
         """
         Transcribe audio to text using Deepgram Nova-2.
-        
+
         Args:
             audio_data: Raw audio bytes
             content_type: MIME type of audio (audio/ogg, audio/wav, etc.)
             options: Override default transcription options
-            
+
         Returns:
             Transcribed text
         """
         # Merge options
         params = {**self.default_options, **(options or {})}
-        
+
         headers = {
             "Authorization": f"Token {self.api_key}",
             "Content-Type": content_type,
@@ -121,19 +117,19 @@ class DeepgramService:
             logger.error("deepgram_transcription_error", error=str(e))
             raise
 
-    async def transcribe_url(self, audio_url: str, options: Optional[dict] = None) -> str:
+    async def transcribe_url(self, audio_url: str, options: dict | None = None) -> str:
         """
         Transcribe audio from a URL.
-        
+
         Args:
             audio_url: URL of the audio file
             options: Override default transcription options
-            
+
         Returns:
             Transcribed text
         """
         params = {**self.default_options, **(options or {})}
-        
+
         headers = {
             "Authorization": f"Token {self.api_key}",
             "Content-Type": "application/json",

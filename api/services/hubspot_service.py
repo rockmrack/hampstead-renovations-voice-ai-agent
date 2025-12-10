@@ -4,13 +4,12 @@ Handles contact management, deal creation, and activity logging.
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -37,10 +36,10 @@ class HubSpotService:
     async def contact_exists(self, phone: str) -> bool:
         """Check if a contact exists by phone number."""
         url = f"{self.base_url}/crm/v3/objects/contacts/search"
-        
+
         # Clean phone number
         phone_clean = phone.replace("+", "").replace(" ", "").replace("-", "")
-        
+
         payload = {
             "filterGroups": [
                 {
@@ -72,12 +71,12 @@ class HubSpotService:
             logger.error("hubspot_contact_search_error", error=str(e))
             return False
 
-    async def get_contact_by_phone(self, phone: str) -> Optional[dict]:
+    async def get_contact_by_phone(self, phone: str) -> dict | None:
         """Get contact details by phone number."""
         url = f"{self.base_url}/crm/v3/objects/contacts/search"
-        
+
         phone_clean = phone.replace("+", "").replace(" ", "").replace("-", "")
-        
+
         payload = {
             "filterGroups": [
                 {
@@ -91,9 +90,17 @@ class HubSpotService:
                 }
             ],
             "properties": [
-                "phone", "firstname", "lastname", "email",
-                "address", "city", "zip", "lifecyclestage",
-                "hs_lead_status", "project_type", "lead_score",
+                "phone",
+                "firstname",
+                "lastname",
+                "email",
+                "address",
+                "city",
+                "zip",
+                "lifecyclestage",
+                "hs_lead_status",
+                "project_type",
+                "lead_score",
             ],
             "limit": 1,
         }
@@ -107,7 +114,7 @@ class HubSpotService:
                 )
                 response.raise_for_status()
                 data = response.json()
-                
+
                 if data.get("total", 0) > 0:
                     return data["results"][0]
                 return None
@@ -123,16 +130,16 @@ class HubSpotService:
     async def create_or_update_contact(
         self,
         phone: str,
-        name: Optional[str] = None,
-        email: Optional[str] = None,
-        project_type: Optional[str] = None,
-        address: Optional[str] = None,
-        postcode: Optional[str] = None,
+        name: str | None = None,
+        email: str | None = None,
+        project_type: str | None = None,
+        address: str | None = None,
+        postcode: str | None = None,
         source: str = "voice_agent",
         **extra_properties,
     ) -> dict:
         """Create or update a contact in HubSpot."""
-        
+
         # Parse name
         firstname = ""
         lastname = ""
@@ -147,7 +154,7 @@ class HubSpotService:
             "hs_lead_status": "NEW",
             "lead_source": source,
         }
-        
+
         if firstname:
             properties["firstname"] = firstname
         if lastname:
@@ -160,7 +167,7 @@ class HubSpotService:
             properties["address"] = address
         if postcode:
             properties["zip"] = postcode
-            
+
         # Add any extra properties
         properties.update(extra_properties)
 
@@ -207,7 +214,7 @@ class HubSpotService:
         self,
         phone: str,
         qualification: dict[str, Any],
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Update contact with qualification data from AI analysis."""
         contact = await self.get_contact_by_phone(phone)
         if not contact:
@@ -215,7 +222,7 @@ class HubSpotService:
             return None
 
         contact_id = contact["id"]
-        
+
         # Extract qualification data
         qual_data = qualification.get("qualification", {})
         project_data = qualification.get("project", {})
@@ -262,13 +269,13 @@ class HubSpotService:
                     json={"properties": properties},
                 )
                 response.raise_for_status()
-                
+
                 logger.info(
                     "hubspot_qualification_updated",
                     contact_id=contact_id,
                     lead_score=qual_data.get("lead_score"),
                 )
-                
+
                 return response.json()
 
         except Exception as e:
@@ -280,9 +287,9 @@ class HubSpotService:
         phone: str,
         transcript: str,
         summary: str,
-        duration: Optional[int] = None,
-        qualification: Optional[dict] = None,
-    ) -> Optional[dict]:
+        duration: int | None = None,
+        qualification: dict | None = None,
+    ) -> dict | None:
         """Log a phone call as an engagement in HubSpot."""
         contact = await self.get_contact_by_phone(phone)
         if not contact:
@@ -296,10 +303,10 @@ class HubSpotService:
 
         # Build call body
         body = f"**Summary:**\n{summary}\n\n**Full Transcript:**\n{transcript}"
-        
+
         if qualification:
             qual = qualification.get("qualification", {})
-            body += f"\n\n**AI Qualification:**\n"
+            body += "\n\n**AI Qualification:**\n"
             body += f"- Lead Score: {qual.get('lead_score', 'N/A')}\n"
             body += f"- Lead Tier: {qual.get('lead_tier', 'N/A')}\n"
             body += f"- Urgency: {qual.get('urgency', 'N/A')}"
@@ -312,7 +319,7 @@ class HubSpotService:
             "hs_call_status": "COMPLETED",
             "hs_timestamp": datetime.utcnow().isoformat() + "Z",
         }
-        
+
         if duration:
             properties["hs_call_duration"] = str(duration * 1000)  # milliseconds
 
@@ -340,7 +347,7 @@ class HubSpotService:
                 )
 
                 logger.info("hubspot_call_logged", call_id=call_id, contact_id=contact_id)
-                
+
                 return call_data
 
         except Exception as e:
@@ -353,17 +360,17 @@ class HubSpotService:
         deal_name: str,
         pipeline: str = "default",
         stage: str = "appointmentscheduled",
-        amount: Optional[float] = None,
-    ) -> Optional[dict]:
+        amount: float | None = None,
+    ) -> dict | None:
         """Create a deal associated with a contact."""
         url = f"{self.base_url}/crm/v3/objects/deals"
-        
+
         properties = {
             "dealname": deal_name,
             "pipeline": pipeline,
             "dealstage": stage,
         }
-        
+
         if amount:
             properties["amount"] = str(amount)
 

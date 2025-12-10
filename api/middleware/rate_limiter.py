@@ -4,15 +4,14 @@ Implements sliding window rate limiting per IP and per phone number.
 """
 
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
+import structlog
+from config import settings
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 from redis import asyncio as aioredis
-import structlog
-
-from config import settings
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = structlog.get_logger(__name__)
 
@@ -20,7 +19,7 @@ logger = structlog.get_logger(__name__)
 class RateLimiterMiddleware(BaseHTTPMiddleware):
     """
     Rate limiting middleware using Redis sliding window.
-    
+
     Limits requests by:
     - IP address (general rate limiting)
     - Phone number (for WhatsApp endpoints)
@@ -37,7 +36,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         self.redis_url = redis_url or settings.redis_url
         self.default_limit = default_limit
         self.default_window = default_window
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: aioredis.Redis | None = None
 
         # Endpoint-specific rate limits
         self.endpoint_limits = {
@@ -72,11 +71,11 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             return forwarded.split(",")[0].strip()
-        
+
         real_ip = request.headers.get("X-Real-IP")
         if real_ip:
             return real_ip
-            
+
         return request.client.host if request.client else "unknown"
 
     def _get_rate_limit_config(self, path: str) -> dict:
@@ -94,39 +93,39 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
     ) -> tuple[bool, int, int]:
         """
         Check rate limit using sliding window.
-        
+
         Returns:
             Tuple of (is_allowed, remaining, reset_time)
         """
         try:
             redis = await self._get_redis()
-            
+
             now = time.time()
             window_start = now - window
 
             # Use Redis pipeline for atomic operations
             pipe = redis.pipeline()
-            
+
             # Remove old entries
             pipe.zremrangebyscore(key, 0, window_start)
-            
+
             # Count current entries
             pipe.zcard(key)
-            
+
             # Add current request
             pipe.zadd(key, {str(now): now})
-            
+
             # Set expiry
             pipe.expire(key, window)
-            
+
             results = await pipe.execute()
             current_count = results[1]
-            
+
             remaining = max(0, limit - current_count - 1)
             reset_time = int(now + window)
-            
+
             is_allowed = current_count < limit
-            
+
             return is_allowed, remaining, reset_time
 
         except Exception as e:
@@ -136,7 +135,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
-        
+
         # Skip rate limiting for certain paths
         if any(path.startswith(skip) for skip in self.skip_paths):
             return await call_next(request)
@@ -151,9 +150,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         key = f"ratelimit:{path}:{client_ip}"
 
         # Check rate limit
-        is_allowed, remaining, reset_time = await self._check_rate_limit(
-            key, limit, window
-        )
+        is_allowed, remaining, reset_time = await self._check_rate_limit(key, limit, window)
 
         # Add rate limit headers to response
         headers = {
@@ -169,7 +166,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
                 path=path,
                 limit=limit,
             )
-            
+
             return JSONResponse(
                 status_code=429,
                 content={
@@ -182,7 +179,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
 
         # Process request
         response = await call_next(request)
-        
+
         # Add rate limit headers
         for header, value in headers.items():
             response.headers[header] = value
@@ -205,7 +202,7 @@ class PhoneRateLimiter:
         self.redis_url = redis_url or settings.redis_url
         self.default_limit = default_limit
         self.default_window = default_window
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: aioredis.Redis | None = None
 
     async def _get_redis(self) -> aioredis.Redis:
         """Get or create Redis connection."""
@@ -221,30 +218,30 @@ class PhoneRateLimiter:
         self,
         phone: str,
         action: str = "message",
-        limit: Optional[int] = None,
-        window: Optional[int] = None,
+        limit: int | None = None,
+        window: int | None = None,
     ) -> bool:
         """
         Check if phone number is within rate limits.
-        
+
         Args:
             phone: Phone number
             action: Action type (message, voice_note, call)
             limit: Override default limit
             window: Override default window
-            
+
         Returns:
             True if allowed, False if rate limited
         """
         limit = limit or self.default_limit
         window = window or self.default_window
-        
+
         phone_clean = phone.replace("+", "").replace(" ", "")
         key = f"phone_ratelimit:{action}:{phone_clean}"
 
         try:
             redis = await self._get_redis()
-            
+
             now = time.time()
             window_start = now - window
 
@@ -253,12 +250,12 @@ class PhoneRateLimiter:
             pipe.zcard(key)
             pipe.zadd(key, {str(now): now})
             pipe.expire(key, window)
-            
+
             results = await pipe.execute()
             current_count = results[1]
-            
+
             is_allowed = current_count < limit
-            
+
             if not is_allowed:
                 logger.warning(
                     "phone_rate_limit_exceeded",
@@ -266,7 +263,7 @@ class PhoneRateLimiter:
                     action=action,
                     count=current_count,
                 )
-            
+
             return is_allowed
 
         except Exception as e:

@@ -3,21 +3,19 @@ Hampstead Renovations Voice Agent API
 Main FastAPI application with enterprise-grade features.
 """
 
-import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
+from config import settings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_client import make_asgi_app
-
-from config import settings
 from middleware.error_handler import ErrorHandlerMiddleware
 from middleware.rate_limiter import RateLimiterMiddleware
 from middleware.request_logger import RequestLoggerMiddleware
+from prometheus_client import make_asgi_app
 from routes import calendar, health, vapi_webhooks, voice, whatsapp
 from utils.metrics import setup_metrics
 
@@ -32,7 +30,9 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer() if settings.log_format == "json" else structlog.dev.ConsoleRenderer(),
+        structlog.processors.JSONRenderer()
+        if settings.log_format == "json"
+        else structlog.dev.ConsoleRenderer(),
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
@@ -57,8 +57,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Initialize services
     try:
         # Import services here to avoid circular imports
-        from services.claude_service import claude_service
-        from services.hubspot_service import hubspot_service
 
         # Verify API connections
         logger.info("verifying_api_connections")
@@ -131,7 +129,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         content={
             "error": "internal_server_error",
             "message": "An unexpected error occurred. Please try again later.",
-            "request_id": request.state.request_id if hasattr(request.state, "request_id") else None,
+            "request_id": request.state.request_id
+            if hasattr(request.state, "request_id")
+            else None,
         },
     )
 

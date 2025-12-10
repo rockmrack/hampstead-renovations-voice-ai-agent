@@ -3,13 +3,10 @@ WhatsApp Business API service via 360dialog.
 Handles sending messages, media, and downloading voice notes.
 """
 
-from typing import Optional
-
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -36,16 +33,16 @@ class WhatsAppService:
     async def send_text_message(self, to: str, text: str) -> dict:
         """
         Send a text message via WhatsApp.
-        
+
         Args:
             to: Recipient phone number (E.164 format)
             text: Message text
-            
+
         Returns:
             API response
         """
         url = f"{self.base_url}/messages"
-        
+
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -97,16 +94,16 @@ class WhatsAppService:
     async def send_audio_message(self, to: str, audio_url: str) -> dict:
         """
         Send an audio message (voice note) via WhatsApp.
-        
+
         Args:
             to: Recipient phone number
             audio_url: Public URL of audio file
-            
+
         Returns:
             API response
         """
         url = f"{self.base_url}/messages"
-        
+
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -144,22 +141,22 @@ class WhatsAppService:
         to: str,
         template_name: str,
         language_code: str = "en_GB",
-        components: Optional[list] = None,
+        components: list | None = None,
     ) -> dict:
         """
         Send a template message (pre-approved by WhatsApp).
-        
+
         Args:
             to: Recipient phone number
             template_name: Name of approved template
             language_code: Template language
             components: Template variable components
-            
+
         Returns:
             API response
         """
         url = f"{self.base_url}/messages"
-        
+
         payload = {
             "messaging_product": "whatsapp",
             "to": to,
@@ -169,7 +166,7 @@ class WhatsAppService:
                 "language": {"code": language_code},
             },
         }
-        
+
         if components:
             payload["template"]["components"] = components
 
@@ -202,12 +199,12 @@ class WhatsAppService:
         to: str,
         body_text: str,
         buttons: list[dict],
-        header_text: Optional[str] = None,
-        footer_text: Optional[str] = None,
+        header_text: str | None = None,
+        footer_text: str | None = None,
     ) -> dict:
         """
         Send interactive message with buttons.
-        
+
         Args:
             to: Recipient phone number
             body_text: Main message text
@@ -216,7 +213,7 @@ class WhatsAppService:
             footer_text: Optional footer
         """
         url = f"{self.base_url}/messages"
-        
+
         interactive = {
             "type": "button",
             "body": {"text": body_text},
@@ -227,7 +224,7 @@ class WhatsAppService:
                 ]
             },
         }
-        
+
         if header_text:
             interactive["header"] = {"type": "text", "text": header_text}
         if footer_text:
@@ -257,10 +254,10 @@ class WhatsAppService:
     async def download_media(self, media_id: str) -> bytes:
         """
         Download media file from WhatsApp.
-        
+
         Args:
             media_id: WhatsApp media ID
-            
+
         Returns:
             Media file bytes
         """
@@ -306,7 +303,7 @@ class WhatsAppService:
     async def mark_as_read(self, message_id: str) -> dict:
         """Mark a message as read."""
         url = f"{self.base_url}/messages"
-        
+
         payload = {
             "messaging_product": "whatsapp",
             "status": "read",
@@ -329,7 +326,7 @@ class WhatsAppService:
     async def send_reaction(self, message_id: str, to: str, emoji: str) -> dict:
         """Send a reaction to a message."""
         url = f"{self.base_url}/messages"
-        
+
         payload = {
             "messaging_product": "whatsapp",
             "to": to,

@@ -3,13 +3,11 @@ Conversation service for managing chat history and context.
 Uses Redis for caching and PostgreSQL for persistence.
 """
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 import structlog
-from redis import asyncio as aioredis
-
 from config import settings
+from redis import asyncio as aioredis
 
 logger = structlog.get_logger(__name__)
 
@@ -20,7 +18,7 @@ class ConversationService:
     def __init__(self):
         self.redis_url = settings.redis_url
         self.cache_ttl = settings.redis_conversation_ttl
-        self._redis: Optional[aioredis.Redis] = None
+        self._redis: aioredis.Redis | None = None
 
     async def _get_redis(self) -> aioredis.Redis:
         """Get or create Redis connection."""
@@ -50,30 +48,30 @@ class ConversationService:
     ) -> str:
         """
         Get recent conversation history for context.
-        
+
         Args:
             phone: Customer phone number
             channel: Communication channel
             max_messages: Maximum messages to return
-            
+
         Returns:
             Formatted conversation history string
         """
         try:
             redis = await self._get_redis()
             key = self._get_conversation_key(phone, channel)
-            
+
             # Get recent messages from list
             messages = await redis.lrange(key, 0, max_messages * 2 - 1)
-            
+
             if not messages:
                 return ""
-            
+
             # Format messages
             history_lines = []
             for msg in reversed(messages):
                 history_lines.append(msg)
-            
+
             return "\n".join(history_lines)
 
         except Exception as e:
@@ -89,7 +87,7 @@ class ConversationService:
     ) -> None:
         """
         Add a message to conversation history.
-        
+
         Args:
             phone: Customer phone number
             role: 'customer' or 'agent'
@@ -99,17 +97,17 @@ class ConversationService:
         try:
             redis = await self._get_redis()
             key = self._get_conversation_key(phone, channel)
-            
+
             # Format message
             timestamp = datetime.utcnow().strftime("%H:%M")
             formatted = f"[{timestamp}] {role.title()}: {content}"
-            
+
             # Add to list (newest at front)
             await redis.lpush(key, formatted)
-            
+
             # Trim to keep only recent messages
             await redis.ltrim(key, 0, 19)  # Keep last 20 messages
-            
+
             # Set expiry
             await redis.expire(key, self.cache_ttl)
 
@@ -126,7 +124,7 @@ class ConversationService:
     ) -> None:
         """
         Log a message exchange to history.
-        
+
         Args:
             phone: Customer phone number
             direction: 'inbound' or 'outbound'
@@ -137,7 +135,7 @@ class ConversationService:
         try:
             # Add customer message
             await self.add_message(phone, "Customer", content, channel)
-            
+
             # Add agent response
             await self.add_message(phone, "Agent", response, channel)
 
@@ -154,13 +152,13 @@ class ConversationService:
     async def get_context(self, phone: str) -> dict:
         """
         Get stored context for a conversation.
-        
+
         Returns extracted information like name, project type, etc.
         """
         try:
             redis = await self._get_redis()
             key = self._get_context_key(phone)
-            
+
             context = await redis.hgetall(key)
             return context or {}
 
@@ -171,7 +169,7 @@ class ConversationService:
     async def update_context(self, phone: str, updates: dict) -> None:
         """
         Update conversation context with new information.
-        
+
         Args:
             phone: Customer phone number
             updates: Dict of context key-value pairs to update
@@ -179,7 +177,7 @@ class ConversationService:
         try:
             redis = await self._get_redis()
             key = self._get_context_key(phone)
-            
+
             if updates:
                 await redis.hset(key, mapping=updates)
                 await redis.expire(key, self.cache_ttl)
@@ -193,9 +191,9 @@ class ConversationService:
             redis = await self._get_redis()
             conv_key = self._get_conversation_key(phone, channel)
             ctx_key = self._get_context_key(phone)
-            
+
             await redis.delete(conv_key, ctx_key)
-            
+
             logger.info("conversation_cleared", phone=phone)
 
         except Exception as e:
@@ -205,26 +203,28 @@ class ConversationService:
         """Get list of currently active conversations."""
         try:
             redis = await self._get_redis()
-            
+
             # Find all conversation keys
             keys = await redis.keys("conversation:*")
-            
+
             conversations = []
             for key in keys:
                 parts = key.split(":")
                 if len(parts) >= 3:
                     channel = parts[1]
                     phone = parts[2]
-                    
+
                     # Get most recent message
                     recent = await redis.lrange(key, 0, 0)
-                    
-                    conversations.append({
-                        "phone": phone,
-                        "channel": channel,
-                        "last_message": recent[0] if recent else None,
-                    })
-            
+
+                    conversations.append(
+                        {
+                            "phone": phone,
+                            "channel": channel,
+                            "last_message": recent[0] if recent else None,
+                        }
+                    )
+
             return conversations
 
         except Exception as e:
@@ -235,10 +235,10 @@ class ConversationService:
         """Get conversation statistics."""
         try:
             redis = await self._get_redis()
-            
+
             whatsapp_keys = await redis.keys("conversation:whatsapp:*")
             phone_keys = await redis.keys("conversation:phone:*")
-            
+
             return {
                 "active_whatsapp": len(whatsapp_keys),
                 "active_phone": len(phone_keys),

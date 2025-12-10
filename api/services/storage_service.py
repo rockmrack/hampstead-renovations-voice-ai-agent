@@ -2,11 +2,9 @@
 AWS S3 storage service for audio files and documents.
 """
 
-from typing import Optional
 import uuid
 
 import structlog
-
 from config import settings
 
 logger = structlog.get_logger(__name__)
@@ -24,6 +22,7 @@ class StorageService:
         """Get or create S3 client."""
         if self._client is None:
             import aioboto3
+
             session = aioboto3.Session()
             self._client = await session.client(
                 "s3",
@@ -36,17 +35,17 @@ class StorageService:
     async def upload_audio(
         self,
         audio_data: bytes,
-        filename: Optional[str] = None,
+        filename: str | None = None,
         content_type: str = "audio/mpeg",
     ) -> str:
         """
         Upload audio file to S3 and return public URL.
-        
+
         Args:
             audio_data: Audio file bytes
             filename: Optional filename (generated if not provided)
             content_type: MIME type of audio
-            
+
         Returns:
             Public URL of uploaded file
         """
@@ -55,7 +54,7 @@ class StorageService:
 
         try:
             client = await self._get_client()
-            
+
             await client.put_object(
                 Bucket=self.bucket,
                 Key=filename,
@@ -65,7 +64,7 @@ class StorageService:
             )
 
             url = f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{filename}"
-            
+
             logger.info(
                 "audio_uploaded",
                 filename=filename,
@@ -87,18 +86,18 @@ class StorageService:
     ) -> str:
         """
         Upload document to S3.
-        
+
         Args:
             data: File bytes
             filename: S3 key/path
             content_type: MIME type
-            
+
         Returns:
             Public URL
         """
         try:
             client = await self._get_client()
-            
+
             await client.put_object(
                 Bucket=self.bucket,
                 Key=filename,
@@ -107,7 +106,7 @@ class StorageService:
             )
 
             url = f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{filename}"
-            
+
             logger.info("document_uploaded", filename=filename)
             return url
 
@@ -122,17 +121,17 @@ class StorageService:
     ) -> str:
         """
         Generate presigned URL for private file access.
-        
+
         Args:
             filename: S3 key
             expires_in: URL expiration in seconds
-            
+
         Returns:
             Presigned URL
         """
         try:
             client = await self._get_client()
-            
+
             url = await client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": self.bucket, "Key": filename},
@@ -149,7 +148,7 @@ class StorageService:
         """Delete a file from S3."""
         try:
             client = await self._get_client()
-            
+
             await client.delete_object(
                 Bucket=self.bucket,
                 Key=filename,
@@ -166,7 +165,7 @@ class StorageService:
         """Check if a file exists in S3."""
         try:
             client = await self._get_client()
-            
+
             await client.head_object(
                 Bucket=self.bucket,
                 Key=filename,

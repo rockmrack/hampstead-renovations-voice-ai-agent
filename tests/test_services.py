@@ -2,9 +2,9 @@
 Unit tests for service layer.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
 
 
 class TestClaudeService:
@@ -28,7 +28,7 @@ class TestClaudeService:
             conversation="I want to renovate my kitchen in Hampstead",
             phone="+447912345678",
         )
-        
+
         assert "qualification" in result
         assert "lead_score" in result["qualification"]
         assert result["qualification"]["lead_score"] >= 0
@@ -40,7 +40,7 @@ class TestClaudeService:
         result = await mock_claude_service.analyze_sentiment(
             message="I'm very happy with the service!"
         )
-        
+
         assert "sentiment" in result
         assert result["sentiment"] in ["positive", "neutral", "negative", "frustrated"]
 
@@ -51,9 +51,7 @@ class TestDeepgramService:
     @pytest.mark.asyncio
     async def test_transcribe_audio_bytes(self, mock_deepgram_service):
         """Test transcription from audio bytes."""
-        transcript = await mock_deepgram_service.transcribe_audio(
-            audio_data=b"mock audio data"
-        )
+        transcript = await mock_deepgram_service.transcribe_audio(audio_data=b"mock audio data")
         assert transcript is not None
         assert len(transcript) > 0
 
@@ -72,9 +70,7 @@ class TestElevenLabsService:
     @pytest.mark.asyncio
     async def test_synthesize_speech(self, mock_elevenlabs_service):
         """Test speech synthesis."""
-        audio = await mock_elevenlabs_service.synthesize_speech(
-            text="Hello, this is a test."
-        )
+        audio = await mock_elevenlabs_service.synthesize_speech(text="Hello, this is a test.")
         assert audio is not None
         assert isinstance(audio, bytes)
 
@@ -114,9 +110,7 @@ class TestWhatsAppService:
     @pytest.mark.asyncio
     async def test_download_media(self, mock_whatsapp_service):
         """Test downloading media."""
-        content = await mock_whatsapp_service.download_media(
-            media_id="media123"
-        )
+        content = await mock_whatsapp_service.download_media(media_id="media123")
         assert content is not None
         assert isinstance(content, bytes)
 
@@ -127,9 +121,7 @@ class TestHubSpotService:
     @pytest.mark.asyncio
     async def test_contact_exists(self, mock_hubspot_service):
         """Test checking if contact exists."""
-        exists = await mock_hubspot_service.contact_exists(
-            phone="+447912345678"
-        )
+        exists = await mock_hubspot_service.contact_exists(phone="+447912345678")
         assert isinstance(exists, bool)
 
     @pytest.mark.asyncio
@@ -186,9 +178,7 @@ class TestCalendarService:
     @pytest.mark.asyncio
     async def test_cancel_booking(self, mock_calendar_service):
         """Test cancelling a booking."""
-        result = await mock_calendar_service.cancel_booking(
-            event_id="event_123"
-        )
+        result = await mock_calendar_service.cancel_booking(event_id="event_123")
         assert result is True
 
 
@@ -198,21 +188,23 @@ class TestConversationService:
     @pytest.mark.asyncio
     async def test_get_history_empty(self, mock_redis):
         """Test getting empty conversation history."""
-        with patch("services.conversation_service.conversation_service._get_redis", return_value=mock_redis):
+        with patch(
+            "services.conversation_service.conversation_service._get_redis", return_value=mock_redis
+        ):
             from services.conversation_service import conversation_service
-            
+
             mock_redis.lrange.return_value = []
-            history = await conversation_service.get_conversation_history(
-                phone="+447912345678"
-            )
+            history = await conversation_service.get_conversation_history(phone="+447912345678")
             assert history == ""
 
     @pytest.mark.asyncio
     async def test_add_message(self, mock_redis):
         """Test adding message to history."""
-        with patch("services.conversation_service.conversation_service._get_redis", return_value=mock_redis):
+        with patch(
+            "services.conversation_service.conversation_service._get_redis", return_value=mock_redis
+        ):
             from services.conversation_service import conversation_service
-            
+
             await conversation_service.add_message(
                 phone="+447912345678",
                 role="customer",
@@ -227,9 +219,7 @@ class TestNotificationService:
     @pytest.mark.asyncio
     async def test_notify_slack(self, mock_notification_service):
         """Test Slack notification."""
-        result = await mock_notification_service.notify_slack(
-            message="Test notification"
-        )
+        result = await mock_notification_service.notify_slack(message="Test notification")
         assert result is True
 
     @pytest.mark.asyncio

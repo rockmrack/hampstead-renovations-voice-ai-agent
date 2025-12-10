@@ -4,14 +4,13 @@ Provides consistent error responses and logging.
 """
 
 import traceback
-from typing import Callable
+from collections.abc import Callable
 
+import structlog
+from config import settings
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-import structlog
-
-from config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +18,7 @@ logger = structlog.get_logger(__name__)
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     """
     Global error handling middleware.
-    
+
     Catches unhandled exceptions and returns consistent JSON responses.
     Also logs errors with full context for debugging.
     """
@@ -27,13 +26,13 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         try:
             return await call_next(request)
-            
+
         except Exception as exc:
             # Get request context for logging
             request_id = request.headers.get("X-Request-ID", "unknown")
             path = request.url.path
             method = request.method
-            
+
             # Log the full error
             logger.error(
                 "unhandled_exception",
@@ -67,7 +66,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
 class APIError(Exception):
     """Base class for API errors with status codes."""
-    
+
     def __init__(
         self,
         message: str,
@@ -84,7 +83,7 @@ class APIError(Exception):
 
 class ValidationError(APIError):
     """Validation error (400)."""
-    
+
     def __init__(self, message: str, details: dict = None):
         super().__init__(
             message=message,
@@ -96,7 +95,7 @@ class ValidationError(APIError):
 
 class AuthenticationError(APIError):
     """Authentication error (401)."""
-    
+
     def __init__(self, message: str = "Authentication required"):
         super().__init__(
             message=message,
@@ -107,7 +106,7 @@ class AuthenticationError(APIError):
 
 class AuthorizationError(APIError):
     """Authorization error (403)."""
-    
+
     def __init__(self, message: str = "Permission denied"):
         super().__init__(
             message=message,
@@ -118,7 +117,7 @@ class AuthorizationError(APIError):
 
 class NotFoundError(APIError):
     """Not found error (404)."""
-    
+
     def __init__(self, message: str = "Resource not found"):
         super().__init__(
             message=message,
@@ -129,7 +128,7 @@ class NotFoundError(APIError):
 
 class RateLimitError(APIError):
     """Rate limit error (429)."""
-    
+
     def __init__(self, message: str = "Rate limit exceeded", retry_after: int = 60):
         super().__init__(
             message=message,
@@ -141,7 +140,7 @@ class RateLimitError(APIError):
 
 class ExternalServiceError(APIError):
     """External service error (502)."""
-    
+
     def __init__(self, service: str, message: str = "External service error"):
         super().__init__(
             message=message,

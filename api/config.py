@@ -4,7 +4,6 @@ Uses pydantic-settings for type-safe configuration with environment variables.
 """
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -39,35 +38,35 @@ class Settings(BaseSettings):
     deepgram_api_key: str = Field(default="", description="Deepgram API key for STT")
     elevenlabs_api_key: str = Field(default="", description="ElevenLabs API key for TTS")
     vapi_api_key: str = Field(default="", description="VAPI API key for voice calls")
-    vapi_assistant_id: Optional[str] = None
-    vapi_phone_number_id: Optional[str] = None
-    vapi_webhook_secret: Optional[str] = None
+    vapi_assistant_id: str | None = None
+    vapi_phone_number_id: str | None = None
+    vapi_webhook_secret: str | None = None
 
     # WhatsApp (360dialog)
     whatsapp_api_key: str = Field(default="", description="360dialog API key")
     whatsapp_api_url: str = "https://waba.360dialog.io/v1"
-    whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_phone_number_id: str | None = None
 
     # Twilio
-    twilio_account_sid: Optional[str] = None
-    twilio_auth_token: Optional[str] = None
-    twilio_phone_number: Optional[str] = None
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_phone_number: str | None = None
 
     # HubSpot CRM
     hubspot_api_key: str = Field(default="", description="HubSpot API key")
-    hubspot_portal_id: Optional[str] = None
+    hubspot_portal_id: str | None = None
 
     # Microsoft Graph (Calendar)
-    microsoft_client_id: Optional[str] = None
-    microsoft_client_secret: Optional[str] = None
-    microsoft_tenant_id: Optional[str] = None
-    microsoft_redirect_uri: Optional[str] = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    microsoft_tenant_id: str | None = None
+    microsoft_redirect_uri: str | None = None
     ross_email: str = "ross@hampsteadrenovations.co.uk"
     ross_mobile_number: str = "+447000000000"
 
     # AWS
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
     aws_region: str = "eu-west-2"
     aws_s3_bucket: str = "hampstead-renovations-docs"
 
@@ -82,7 +81,7 @@ class Settings(BaseSettings):
     redis_conversation_ttl: int = 86400  # 24 hours
 
     # Slack Notifications
-    slack_webhook_url: Optional[str] = None
+    slack_webhook_url: str | None = None
     slack_channel: str = "#voice-agent-alerts"
 
     # Rate Limiting
@@ -94,7 +93,7 @@ class Settings(BaseSettings):
     log_format: str = "json"
 
     # Sentry
-    sentry_dsn: Optional[str] = None
+    sentry_dsn: str | None = None
     sentry_traces_sample_rate: float = 0.1
 
     # Feature Flags

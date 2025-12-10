@@ -7,11 +7,9 @@ Comprehensive tests for API endpoints, services, and integrations
 """
 
 import asyncio
-import json
 import os
-from datetime import datetime, timedelta
-from typing import Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import Generator
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,14 +26,15 @@ os.environ["HUBSPOT_API_KEY"] = "test-key"
 
 # Add api directory to path for imports
 import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api"))
 
 from app import app
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -69,15 +68,12 @@ def mock_claude_response():
         "content": [
             {
                 "type": "text",
-                "text": "Thank you for contacting Hampstead Renovations! I'd be happy to help you with your home renovation project. Could you tell me a bit more about what you're looking to achieve?"
+                "text": "Thank you for contacting Hampstead Renovations! I'd be happy to help you with your home renovation project. Could you tell me a bit more about what you're looking to achieve?",
             }
         ],
         "model": "claude-sonnet-4-5-20250514",
         "stop_reason": "end_turn",
-        "usage": {
-            "input_tokens": 150,
-            "output_tokens": 45
-        }
+        "usage": {"input_tokens": 150, "output_tokens": 45},
     }
 
 
@@ -91,7 +87,7 @@ def mock_deepgram_response():
             "sha256": "test-sha",
             "created": "2024-01-01T00:00:00Z",
             "duration": 5.5,
-            "channels": 1
+            "channels": 1,
         },
         "results": {
             "channels": [
@@ -100,12 +96,12 @@ def mock_deepgram_response():
                         {
                             "transcript": "Hello, I'm interested in getting a kitchen renovation quote for my property in Hampstead.",
                             "confidence": 0.98,
-                            "words": []
+                            "words": [],
                         }
                     ]
                 }
             ]
-        }
+        },
     }
 
 
@@ -123,15 +119,10 @@ def sample_whatsapp_text_payload():
                             "messaging_product": "whatsapp",
                             "metadata": {
                                 "display_phone_number": "447900000000",
-                                "phone_number_id": "123456789"
+                                "phone_number_id": "123456789",
                             },
                             "contacts": [
-                                {
-                                    "profile": {
-                                        "name": "John Smith"
-                                    },
-                                    "wa_id": "447912345678"
-                                }
+                                {"profile": {"name": "John Smith"}, "wa_id": "447912345678"}
                             ],
                             "messages": [
                                 {
@@ -141,15 +132,15 @@ def sample_whatsapp_text_payload():
                                     "text": {
                                         "body": "Hi, I'm looking for a quote on a full kitchen renovation in NW3."
                                     },
-                                    "type": "text"
+                                    "type": "text",
                                 }
-                            ]
+                            ],
                         },
-                        "field": "messages"
+                        "field": "messages",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
 
 
@@ -167,15 +158,10 @@ def sample_whatsapp_audio_payload():
                             "messaging_product": "whatsapp",
                             "metadata": {
                                 "display_phone_number": "447900000000",
-                                "phone_number_id": "123456789"
+                                "phone_number_id": "123456789",
                             },
                             "contacts": [
-                                {
-                                    "profile": {
-                                        "name": "Jane Doe"
-                                    },
-                                    "wa_id": "447987654321"
-                                }
+                                {"profile": {"name": "Jane Doe"}, "wa_id": "447987654321"}
                             ],
                             "messages": [
                                 {
@@ -185,17 +171,17 @@ def sample_whatsapp_audio_payload():
                                     "audio": {
                                         "mime_type": "audio/ogg; codecs=opus",
                                         "sha256": "test-sha",
-                                        "id": "audio-media-id-123"
+                                        "id": "audio-media-id-123",
                                     },
-                                    "type": "audio"
+                                    "type": "audio",
                                 }
-                            ]
+                            ],
                         },
-                        "field": "messages"
+                        "field": "messages",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
 
 
@@ -207,18 +193,13 @@ def sample_vapi_webhook_payload():
             "type": "function-call",
             "functionCall": {
                 "name": "check_availability",
-                "parameters": {
-                    "preferred_date": "2024-01-15",
-                    "postcode": "NW3 2AB"
-                }
+                "parameters": {"preferred_date": "2024-01-15", "postcode": "NW3 2AB"},
             },
             "call": {
                 "id": "call-test-123",
                 "phoneNumber": "+447912345678",
-                "customer": {
-                    "number": "+447912345678"
-                }
-            }
+                "customer": {"number": "+447912345678"},
+            },
         }
     }
 
@@ -226,6 +207,7 @@ def sample_vapi_webhook_payload():
 # =============================================================================
 # HEALTH CHECK TESTS
 # =============================================================================
+
 
 class TestHealthEndpoints:
     """Test health check endpoints."""
@@ -262,6 +244,7 @@ class TestHealthEndpoints:
 # WHATSAPP WEBHOOK TESTS
 # =============================================================================
 
+
 class TestWhatsAppWebhook:
     """Test WhatsApp webhook handling."""
 
@@ -270,7 +253,7 @@ class TestWhatsAppWebhook:
         params = {
             "hub.mode": "subscribe",
             "hub.verify_token": os.environ.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "test-token"),
-            "hub.challenge": "test-challenge-12345"
+            "hub.challenge": "test-challenge-12345",
         }
         response = client.get("/api/v1/whatsapp/webhook", params=params)
         # May return 200 with challenge or 403 if token doesn't match
@@ -280,28 +263,19 @@ class TestWhatsAppWebhook:
         """Test handling text message webhook."""
         with patch("api.routes.whatsapp.process_whatsapp_message") as mock_process:
             mock_process.return_value = None
-            response = client.post(
-                "/api/v1/whatsapp/webhook",
-                json=sample_whatsapp_text_payload
-            )
+            response = client.post("/api/v1/whatsapp/webhook", json=sample_whatsapp_text_payload)
             assert response.status_code == 200
 
     def test_webhook_audio_message(self, client, sample_whatsapp_audio_payload):
         """Test handling audio message webhook."""
         with patch("api.routes.whatsapp.process_whatsapp_message") as mock_process:
             mock_process.return_value = None
-            response = client.post(
-                "/api/v1/whatsapp/webhook",
-                json=sample_whatsapp_audio_payload
-            )
+            response = client.post("/api/v1/whatsapp/webhook", json=sample_whatsapp_audio_payload)
             assert response.status_code == 200
 
     def test_webhook_invalid_payload(self, client):
         """Test handling invalid webhook payload."""
-        response = client.post(
-            "/api/v1/whatsapp/webhook",
-            json={"invalid": "payload"}
-        )
+        response = client.post("/api/v1/whatsapp/webhook", json={"invalid": "payload"})
         # Should handle gracefully
         assert response.status_code in [200, 400]
 
@@ -310,6 +284,7 @@ class TestWhatsAppWebhook:
 # VOICE PROCESSING TESTS
 # =============================================================================
 
+
 class TestVoiceProcessing:
     """Test voice note processing."""
 
@@ -317,16 +292,15 @@ class TestVoiceProcessing:
     async def test_transcription_endpoint(self, async_client, mock_deepgram_response):
         """Test voice transcription endpoint."""
         with patch("api.routes.voice.transcribe_audio") as mock_transcribe:
-            mock_transcribe.return_value = mock_deepgram_response["results"]["channels"][0]["alternatives"][0]["transcript"]
-            
+            mock_transcribe.return_value = mock_deepgram_response["results"]["channels"][0][
+                "alternatives"
+            ][0]["transcript"]
+
             # Create mock audio file
             audio_content = b"mock audio content"
             files = {"audio": ("test.ogg", audio_content, "audio/ogg")}
-            
-            response = await async_client.post(
-                "/api/v1/voice/transcribe",
-                files=files
-            )
+
+            response = await async_client.post("/api/v1/voice/transcribe", files=files)
             # May need authentication in production
             assert response.status_code in [200, 401, 422]
 
@@ -334,6 +308,7 @@ class TestVoiceProcessing:
 # =============================================================================
 # CALENDAR TESTS
 # =============================================================================
+
 
 class TestCalendarEndpoints:
     """Test calendar and availability endpoints."""
@@ -343,17 +318,12 @@ class TestCalendarEndpoints:
         with patch("api.routes.calendar.get_availability") as mock_avail:
             mock_avail.return_value = {
                 "available": True,
-                "slots": [
-                    {
-                        "start": "2024-01-15T09:00:00Z",
-                        "end": "2024-01-15T10:00:00Z"
-                    }
-                ]
+                "slots": [{"start": "2024-01-15T09:00:00Z", "end": "2024-01-15T10:00:00Z"}],
             }
-            
+
             response = client.get(
                 "/api/v1/calendar/availability",
-                params={"date": "2024-01-15", "postcode": "NW3 2AB"}
+                params={"date": "2024-01-15", "postcode": "NW3 2AB"},
             )
             assert response.status_code in [200, 401]
 
@@ -362,6 +332,7 @@ class TestCalendarEndpoints:
 # VAPI WEBHOOK TESTS
 # =============================================================================
 
+
 class TestVAPIWebhooks:
     """Test VAPI voice call webhooks."""
 
@@ -369,11 +340,11 @@ class TestVAPIWebhooks:
         """Test VAPI function call handling."""
         with patch("api.routes.vapi_webhooks.verify_vapi_signature") as mock_verify:
             mock_verify.return_value = True
-            
+
             response = client.post(
                 "/api/v1/vapi/webhook",
                 json=sample_vapi_webhook_payload,
-                headers={"X-Vapi-Signature": "test-signature"}
+                headers={"X-Vapi-Signature": "test-signature"},
             )
             assert response.status_code in [200, 401]
 
@@ -382,20 +353,15 @@ class TestVAPIWebhooks:
         payload = {
             "message": {
                 "type": "call-started",
-                "call": {
-                    "id": "call-123",
-                    "phoneNumber": "+447912345678"
-                }
+                "call": {"id": "call-123", "phoneNumber": "+447912345678"},
             }
         }
-        
+
         with patch("api.routes.vapi_webhooks.verify_vapi_signature") as mock_verify:
             mock_verify.return_value = True
-            
+
             response = client.post(
-                "/api/v1/vapi/webhook",
-                json=payload,
-                headers={"X-Vapi-Signature": "test-signature"}
+                "/api/v1/vapi/webhook", json=payload, headers={"X-Vapi-Signature": "test-signature"}
             )
             assert response.status_code in [200, 401]
 
@@ -403,6 +369,7 @@ class TestVAPIWebhooks:
 # =============================================================================
 # LEAD QUALIFICATION TESTS
 # =============================================================================
+
 
 class TestLeadQualification:
     """Test lead qualification and scoring."""
@@ -412,17 +379,20 @@ class TestLeadQualification:
         # Simulated conversation data
         conversation = {
             "messages": [
-                {"role": "user", "content": "I want to renovate my entire ground floor in Hampstead. Budget is around £150k and I want to start in 2 months."},
+                {
+                    "role": "user",
+                    "content": "I want to renovate my entire ground floor in Hampstead. Budget is around £150k and I want to start in 2 months.",
+                },
                 {"role": "assistant", "content": "That sounds like a wonderful project..."},
             ],
             "extracted_info": {
                 "project_type": "full_renovation",
                 "budget_range": "£100k-200k",
                 "timeline": "2_months",
-                "postcode": "NW3"
-            }
+                "postcode": "NW3",
+            },
         }
-        
+
         # Score calculation logic would go here
         # For now, verify structure
         assert "messages" in conversation
@@ -438,16 +408,17 @@ class TestLeadQualification:
                 "project_type": "unknown",
                 "budget_range": "unknown",
                 "timeline": "unknown",
-                "postcode": None
-            }
+                "postcode": None,
+            },
         }
-        
+
         assert conversation["extracted_info"]["project_type"] == "unknown"
 
 
 # =============================================================================
 # INTEGRATION TESTS
 # =============================================================================
+
 
 class TestIntegration:
     """Integration tests for end-to-end flows."""
@@ -469,6 +440,7 @@ class TestIntegration:
 # UTILITY TESTS
 # =============================================================================
 
+
 class TestUtilities:
     """Test utility functions."""
 
@@ -481,9 +453,9 @@ class TestUtilities:
             ("+447912345678", "+447912345678"),
             ("020 7123 4567", "+442071234567"),
         ]
-        
+
         # Utility function would format these
-        for raw, expected in test_numbers:
+        for _raw, _expected in test_numbers:
             # formatted = format_phone_number(raw)
             # assert formatted == expected
             pass
@@ -492,21 +464,20 @@ class TestUtilities:
         """Test postcode validation utility."""
         valid_postcodes = ["NW3 2AB", "NW11 7ES", "N6 5HE", "W1A 1AA"]
         invalid_postcodes = ["ABC 123", "12345", "NW99 9ZZ"]
-        
-        for postcode in valid_postcodes:
+
+        for _postcode in valid_postcodes:
             # assert is_valid_postcode(postcode)
             pass
-        
-        for postcode in invalid_postcodes:
+
+        for _postcode in invalid_postcodes:
             # assert not is_valid_postcode(postcode)
             pass
 
     def test_service_area_check(self):
         """Test service area validation."""
         in_area = ["NW3 2AB", "NW6 1XJ", "N6 5HE", "NW11 7ES"]
-        out_of_area = ["SE1 1AA", "E1 6AN", "SW1A 1AA"]
-        
-        for postcode in in_area:
+
+        for _postcode in in_area:
             # assert is_in_service_area(postcode)
             pass
 
@@ -515,37 +486,39 @@ class TestUtilities:
 # PERFORMANCE TESTS
 # =============================================================================
 
+
 class TestPerformance:
     """Performance and load tests."""
 
     def test_health_endpoint_response_time(self, client):
         """Test health endpoint responds within acceptable time."""
         import time
-        
+
         start = time.time()
         response = client.get("/api/v1/health")
         elapsed = time.time() - start
-        
+
         assert response.status_code == 200
         assert elapsed < 0.5  # Should respond within 500ms
 
     def test_concurrent_requests(self, client):
         """Test handling concurrent requests."""
         import concurrent.futures
-        
+
         def make_request():
             return client.get("/api/v1/health")
-        
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(make_request) for _ in range(10)]
             results = [f.result() for f in futures]
-        
+
         assert all(r.status_code == 200 for r in results)
 
 
 # =============================================================================
 # ERROR HANDLING TESTS
 # =============================================================================
+
 
 class TestErrorHandling:
     """Test error handling and edge cases."""
@@ -565,7 +538,7 @@ class TestErrorHandling:
         response = client.post(
             "/api/v1/whatsapp/webhook",
             content="invalid json{",
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422
 

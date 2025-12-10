@@ -2,11 +2,12 @@
 Prometheus metrics setup and utilities.
 """
 
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
-from fastapi import FastAPI, Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
 import time
+
 import structlog
+from fastapi import FastAPI, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = structlog.get_logger(__name__)
 
@@ -119,6 +120,7 @@ ERROR_COUNT = Counter(
 # Metrics Middleware
 # ============================================
 
+
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Middleware to track request metrics."""
 
@@ -129,50 +131,50 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
         method = request.method
         endpoint = self._get_endpoint(request.url.path)
-        
+
         start_time = time.time()
-        
+
         try:
             response = await call_next(request)
             status_code = str(response.status_code)
-            
+
             # Track metrics
             REQUEST_COUNT.labels(
                 method=method,
                 endpoint=endpoint,
                 status_code=status_code,
             ).inc()
-            
+
             REQUEST_DURATION.labels(
                 method=method,
                 endpoint=endpoint,
             ).observe(time.time() - start_time)
-            
+
             return response
-            
-        except Exception as exc:
+
+        except Exception:
             REQUEST_COUNT.labels(
                 method=method,
                 endpoint=endpoint,
                 status_code="500",
             ).inc()
-            
+
             REQUEST_DURATION.labels(
                 method=method,
                 endpoint=endpoint,
             ).observe(time.time() - start_time)
-            
+
             raise
 
     def _get_endpoint(self, path: str) -> str:
         """Normalize endpoint path for metrics."""
         # Remove specific IDs to avoid cardinality explosion
         parts = path.strip("/").split("/")
-        
+
         # Keep first 3 parts: /api/v1/endpoint
         if len(parts) > 3:
             return "/" + "/".join(parts[:3])
-        
+
         return path
 
 
@@ -180,17 +182,18 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 # Setup Function
 # ============================================
 
+
 def setup_metrics(app: FastAPI) -> None:
     """
     Configure metrics for the FastAPI application.
-    
+
     Adds:
     - Metrics middleware for request tracking
     - /metrics endpoint for Prometheus scraping
     """
     # Add metrics middleware
     app.add_middleware(MetricsMiddleware)
-    
+
     # Add metrics endpoint
     @app.get("/metrics")
     async def metrics():
@@ -198,13 +201,14 @@ def setup_metrics(app: FastAPI) -> None:
             content=generate_latest(),
             media_type=CONTENT_TYPE_LATEST,
         )
-    
+
     logger.info("metrics_configured")
 
 
 # ============================================
 # Tracking Utilities
 # ============================================
+
 
 def track_request(method: str, endpoint: str, status_code: int, duration: float) -> None:
     """Track a request metric."""
@@ -213,7 +217,7 @@ def track_request(method: str, endpoint: str, status_code: int, duration: float)
         endpoint=endpoint,
         status_code=str(status_code),
     ).inc()
-    
+
     REQUEST_DURATION.labels(
         method=method,
         endpoint=endpoint,
@@ -242,7 +246,7 @@ def track_ai_request(service: str, operation: str, duration: float) -> None:
         service=service,
         operation=operation,
     ).inc()
-    
+
     AI_LATENCY.labels(
         service=service,
         operation=operation,
@@ -276,7 +280,7 @@ def track_external_service(service: str, status: str, duration: float) -> None:
         service=service,
         status=status,
     ).inc()
-    
+
     EXTERNAL_SERVICE_LATENCY.labels(
         service=service,
     ).observe(duration)

@@ -4,11 +4,9 @@ Handles Slack, Email, and SMS notifications.
 """
 
 from datetime import datetime
-from typing import Optional
 
 import httpx
 import structlog
-
 from config import settings
 
 logger = structlog.get_logger(__name__)
@@ -26,14 +24,14 @@ class NotificationService:
     async def notify_slack(
         self,
         message: str,
-        channel: Optional[str] = None,
+        channel: str | None = None,
         username: str = "Voice Agent",
         icon_emoji: str = ":robot_face:",
-        attachments: Optional[list] = None,
+        attachments: list | None = None,
     ) -> bool:
         """
         Send notification to Slack channel.
-        
+
         Args:
             message: Main message text
             channel: Override default channel
@@ -76,7 +74,7 @@ class NotificationService:
     ) -> None:
         """
         Send escalation notification for upset/complex customer.
-        
+
         Args:
             phone: Customer phone number
             reason: Reason for escalation
@@ -84,7 +82,7 @@ class NotificationService:
             urgency: 'immediate', 'same-day', 'next-day'
         """
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-        
+
         # Determine emoji based on urgency
         urgency_emoji = {
             "immediate": "🚨",
@@ -93,7 +91,7 @@ class NotificationService:
         }.get(urgency, "📋")
 
         slack_message = f"{urgency_emoji} *Escalation Required*"
-        
+
         attachments = [
             {
                 "color": "danger" if urgency == "immediate" else "warning",
@@ -136,15 +134,19 @@ class NotificationService:
         Notify about a call transfer/callback request.
         """
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-        
+
         slack_message = "📞 *Callback Request*"
-        
+
         attachments = [
             {
                 "color": "good" if urgency != "immediate" else "warning",
                 "fields": [
                     {"title": "Customer Phone", "value": customer_phone, "short": True},
-                    {"title": "Callback Timing", "value": urgency.replace("-", " ").title(), "short": True},
+                    {
+                        "title": "Callback Timing",
+                        "value": urgency.replace("-", " ").title(),
+                        "short": True,
+                    },
                     {"title": "Reason", "value": reason, "short": False},
                 ],
                 "footer": f"Voice Agent | {timestamp}",
@@ -162,44 +164,56 @@ class NotificationService:
     async def notify_new_lead(
         self,
         phone: str,
-        name: Optional[str],
-        project_type: Optional[str],
-        lead_score: Optional[int],
-        lead_tier: Optional[str],
+        name: str | None,
+        project_type: str | None,
+        lead_score: int | None,
+        lead_tier: str | None,
         source: str = "whatsapp",
     ) -> None:
         """
         Notify about a new qualified lead.
         """
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-        
+
         # Color based on lead tier
         tier_colors = {
             "hot": "good",
             "warm": "warning",
             "cold": "#439FE0",
         }
-        
+
         tier_emoji = {
             "hot": "🔥",
             "warm": "👍",
             "cold": "❄️",
         }
-        
+
         emoji = tier_emoji.get(lead_tier, "📋")
         color = tier_colors.get(lead_tier, "#808080")
 
         slack_message = f"{emoji} *New Lead*"
-        
+
         attachments = [
             {
                 "color": color,
                 "fields": [
                     {"title": "Name", "value": name or "Not provided", "short": True},
                     {"title": "Phone", "value": phone, "short": True},
-                    {"title": "Project Type", "value": project_type or "Not specified", "short": True},
-                    {"title": "Lead Score", "value": str(lead_score) if lead_score else "N/A", "short": True},
-                    {"title": "Lead Tier", "value": (lead_tier or "unqualified").title(), "short": True},
+                    {
+                        "title": "Project Type",
+                        "value": project_type or "Not specified",
+                        "short": True,
+                    },
+                    {
+                        "title": "Lead Score",
+                        "value": str(lead_score) if lead_score else "N/A",
+                        "short": True,
+                    },
+                    {
+                        "title": "Lead Tier",
+                        "value": (lead_tier or "unqualified").title(),
+                        "short": True,
+                    },
                     {"title": "Source", "value": source.title(), "short": True},
                 ],
                 "footer": f"Voice Agent | {timestamp}",
@@ -226,7 +240,7 @@ class NotificationService:
         address: str,
         date: str,
         time: str,
-        project_type: Optional[str] = None,
+        project_type: str | None = None,
     ) -> None:
         """
         Notify about a new survey booking.
@@ -234,7 +248,7 @@ class NotificationService:
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
         slack_message = "📅 *New Survey Booking*"
-        
+
         attachments = [
             {
                 "color": "good",
@@ -244,7 +258,11 @@ class NotificationService:
                     {"title": "Date", "value": date, "short": True},
                     {"title": "Time", "value": time, "short": True},
                     {"title": "Address", "value": address, "short": False},
-                    {"title": "Project Type", "value": project_type or "General enquiry", "short": True},
+                    {
+                        "title": "Project Type",
+                        "value": project_type or "General enquiry",
+                        "short": True,
+                    },
                 ],
                 "footer": f"Voice Agent | {timestamp}",
             }
@@ -276,7 +294,7 @@ class NotificationService:
 
         try:
             client = Client(settings.twilio_account_sid, settings.twilio_auth_token)
-            
+
             sms = client.messages.create(
                 body=message[:160],  # SMS limit
                 from_=settings.twilio_phone_number,
@@ -293,8 +311,8 @@ class NotificationService:
     async def send_email_alert(
         self,
         subject: str,
-        body: str,
-        to_email: Optional[str] = None,
+        body: str,  # noqa: ARG002 - Will be used when email service is implemented
+        to_email: str | None = None,
     ) -> bool:
         """
         Send email alert (for less urgent notifications).
@@ -313,17 +331,37 @@ class NotificationService:
         Send daily summary notification.
         """
         slack_message = "📊 *Daily Voice Agent Summary*"
-        
+
         attachments = [
             {
                 "color": "#439FE0",
                 "fields": [
-                    {"title": "Total Conversations", "value": str(stats.get("total_conversations", 0)), "short": True},
-                    {"title": "WhatsApp Messages", "value": str(stats.get("whatsapp_messages", 0)), "short": True},
-                    {"title": "Phone Calls", "value": str(stats.get("phone_calls", 0)), "short": True},
-                    {"title": "Bookings Made", "value": str(stats.get("bookings", 0)), "short": True},
+                    {
+                        "title": "Total Conversations",
+                        "value": str(stats.get("total_conversations", 0)),
+                        "short": True,
+                    },
+                    {
+                        "title": "WhatsApp Messages",
+                        "value": str(stats.get("whatsapp_messages", 0)),
+                        "short": True,
+                    },
+                    {
+                        "title": "Phone Calls",
+                        "value": str(stats.get("phone_calls", 0)),
+                        "short": True,
+                    },
+                    {
+                        "title": "Bookings Made",
+                        "value": str(stats.get("bookings", 0)),
+                        "short": True,
+                    },
                     {"title": "Hot Leads", "value": str(stats.get("hot_leads", 0)), "short": True},
-                    {"title": "Escalations", "value": str(stats.get("escalations", 0)), "short": True},
+                    {
+                        "title": "Escalations",
+                        "value": str(stats.get("escalations", 0)),
+                        "short": True,
+                    },
                 ],
                 "footer": datetime.utcnow().strftime("Report for %Y-%m-%d"),
             }

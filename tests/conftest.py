@@ -5,8 +5,8 @@ Pytest configuration and shared fixtures.
 import asyncio
 import os
 import sys
-from typing import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import AsyncGenerator, Generator
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -41,6 +41,7 @@ def event_loop():
 def app():
     """Create FastAPI app instance."""
     from app import app as fastapi_app
+
     return fastapi_app
 
 
@@ -61,6 +62,7 @@ async def async_client(app) -> AsyncGenerator:
 # =============================================================================
 # Mock Services
 # =============================================================================
+
 
 @pytest.fixture
 def mock_redis():
@@ -181,32 +183,43 @@ def mock_notification_service():
 # Sample Payloads
 # =============================================================================
 
+
 @pytest.fixture
 def sample_whatsapp_text_message():
     """Sample WhatsApp text message payload."""
     return {
         "object": "whatsapp_business_account",
-        "entry": [{
-            "id": "123456789",
-            "changes": [{
-                "value": {
-                    "messaging_product": "whatsapp",
-                    "metadata": {
-                        "display_phone_number": "447900000000",
-                        "phone_number_id": "123456789"
-                    },
-                    "contacts": [{"profile": {"name": "John Smith"}, "wa_id": "447912345678"}],
-                    "messages": [{
-                        "from": "447912345678",
-                        "id": "wamid.test123",
-                        "timestamp": "1733356800",
-                        "text": {"body": "Hi, I'm looking for a kitchen renovation quote in NW3."},
-                        "type": "text"
-                    }]
-                },
-                "field": "messages"
-            }]
-        }]
+        "entry": [
+            {
+                "id": "123456789",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {
+                                "display_phone_number": "447900000000",
+                                "phone_number_id": "123456789",
+                            },
+                            "contacts": [
+                                {"profile": {"name": "John Smith"}, "wa_id": "447912345678"}
+                            ],
+                            "messages": [
+                                {
+                                    "from": "447912345678",
+                                    "id": "wamid.test123",
+                                    "timestamp": "1733356800",
+                                    "text": {
+                                        "body": "Hi, I'm looking for a kitchen renovation quote in NW3."
+                                    },
+                                    "type": "text",
+                                }
+                            ],
+                        },
+                        "field": "messages",
+                    }
+                ],
+            }
+        ],
     }
 
 
@@ -215,31 +228,39 @@ def sample_whatsapp_audio_message():
     """Sample WhatsApp audio message payload."""
     return {
         "object": "whatsapp_business_account",
-        "entry": [{
-            "id": "123456789",
-            "changes": [{
-                "value": {
-                    "messaging_product": "whatsapp",
-                    "metadata": {
-                        "display_phone_number": "447900000000",
-                        "phone_number_id": "123456789"
-                    },
-                    "contacts": [{"profile": {"name": "Jane Doe"}, "wa_id": "447987654321"}],
-                    "messages": [{
-                        "from": "447987654321",
-                        "id": "wamid.audio123",
-                        "timestamp": "1733356800",
-                        "audio": {
-                            "mime_type": "audio/ogg; codecs=opus",
-                            "sha256": "test-sha",
-                            "id": "audio-media-id-123"
+        "entry": [
+            {
+                "id": "123456789",
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {
+                                "display_phone_number": "447900000000",
+                                "phone_number_id": "123456789",
+                            },
+                            "contacts": [
+                                {"profile": {"name": "Jane Doe"}, "wa_id": "447987654321"}
+                            ],
+                            "messages": [
+                                {
+                                    "from": "447987654321",
+                                    "id": "wamid.audio123",
+                                    "timestamp": "1733356800",
+                                    "audio": {
+                                        "mime_type": "audio/ogg; codecs=opus",
+                                        "sha256": "test-sha",
+                                        "id": "audio-media-id-123",
+                                    },
+                                    "type": "audio",
+                                }
+                            ],
                         },
-                        "type": "audio"
-                    }]
-                },
-                "field": "messages"
-            }]
-        }]
+                        "field": "messages",
+                    }
+                ],
+            }
+        ],
     }
 
 
@@ -251,16 +272,13 @@ def sample_vapi_function_call():
             "type": "function-call",
             "functionCall": {
                 "name": "check_availability",
-                "parameters": {
-                    "preferred_date": "2025-01-15",
-                    "postcode": "NW3 2AB"
-                }
+                "parameters": {"preferred_date": "2025-01-15", "postcode": "NW3 2AB"},
             },
             "call": {
                 "id": "call-test-123",
                 "phoneNumber": "+447912345678",
-                "customer": {"number": "+447912345678"}
-            }
+                "customer": {"number": "+447912345678"},
+            },
         }
     }
 
@@ -274,12 +292,12 @@ def sample_vapi_call_ended():
             "call": {
                 "id": "call-test-123",
                 "phoneNumber": "+447912345678",
-                "customer": {"number": "+447912345678"}
+                "customer": {"number": "+447912345678"},
             },
             "endedReason": "customer-ended-call",
             "transcript": "Agent: Hello, Hampstead Renovations...\nCustomer: Hi, I need a quote...",
             "summary": "Customer inquired about kitchen renovation",
-            "recordingUrl": "https://storage.example.com/recording.mp3"
+            "recordingUrl": "https://storage.example.com/recording.mp3",
         }
     }
 
@@ -296,5 +314,5 @@ def sample_booking_request():
         "project_type": "kitchen",
         "date": "2025-01-15",
         "time": "10:00",
-        "notes": "Victorian property, ground floor kitchen"
+        "notes": "Victorian property, ground floor kitchen",
     }

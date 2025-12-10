@@ -2,12 +2,9 @@
 Unit tests for middleware components.
 """
 
+from unittest.mock import patch
+
 import pytest
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from starlette.responses import JSONResponse
 
 
 class TestRateLimiter:
@@ -22,16 +19,18 @@ class TestRateLimiter:
 
     def test_rate_limit_headers_present(self, client):
         """Test rate limit headers are present in response."""
-        response = client.get("/health")
+        client.get("/health")
         # Health endpoint might skip rate limiting, test a different endpoint
         # Headers should be present on rate-limited endpoints
 
     @pytest.mark.asyncio
     async def test_phone_rate_limiter(self, mock_redis):
         """Test phone-based rate limiting."""
-        with patch("middleware.rate_limiter.phone_rate_limiter._get_redis", return_value=mock_redis):
+        with patch(
+            "middleware.rate_limiter.phone_rate_limiter._get_redis", return_value=mock_redis
+        ):
             from middleware.rate_limiter import phone_rate_limiter
-            
+
             mock_redis.zcard.return_value = 5  # Under limit
             result = await phone_rate_limiter.check_limit(
                 phone="+447912345678",
@@ -42,9 +41,11 @@ class TestRateLimiter:
     @pytest.mark.asyncio
     async def test_phone_rate_limiter_exceeded(self, mock_redis):
         """Test phone rate limit exceeded."""
-        with patch("middleware.rate_limiter.phone_rate_limiter._get_redis", return_value=mock_redis):
+        with patch(
+            "middleware.rate_limiter.phone_rate_limiter._get_redis", return_value=mock_redis
+        ):
             from middleware.rate_limiter import phone_rate_limiter
-            
+
             mock_redis.zcard.return_value = 100  # Over limit
             result = await phone_rate_limiter.check_limit(
                 phone="+447912345678",

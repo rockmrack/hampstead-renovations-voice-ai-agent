@@ -5,13 +5,12 @@ Handles all Anthropic Claude API interactions with retry logic and circuit break
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import anthropic
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-
 from config import settings
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -22,8 +21,8 @@ class ClaudeService:
     def __init__(self):
         self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         self.model = "claude-sonnet-4-5-20250514"
-        self._system_prompt: Optional[str] = None
-        self._knowledge_base: Optional[str] = None
+        self._system_prompt: str | None = None
+        self._knowledge_base: str | None = None
 
     @property
     def system_prompt(self) -> str:
@@ -84,7 +83,7 @@ class ClaudeService:
     async def generate_whatsapp_response(self, context: dict[str, Any]) -> str:
         """Generate response for WhatsApp text message."""
         prompt_template = self._load_prompt("whatsapp-text-handler")
-        
+
         system = f"""{self.system_prompt}
 
 KNOWLEDGE BASE:
@@ -99,16 +98,16 @@ KNOWLEDGE BASE:
         is_existing = context.get("is_existing_contact", False)
 
         user_message = f"""CONTEXT:
-- Customer Name: {customer_name or 'Unknown'}
+- Customer Name: {customer_name or "Unknown"}
 - Time of Day: {time_of_day}
-- Existing Contact: {'Yes' if is_existing else 'No'}
-- Phone: {context.get('phone_number', '')}
+- Existing Contact: {"Yes" if is_existing else "No"}
+- Phone: {context.get("phone_number", "")}
 
 CONVERSATION HISTORY:
 {history}
 
 CUSTOMER MESSAGE:
-{context.get('message', '')}
+{context.get("message", "")}
 
 Generate a natural, helpful response. Keep it concise but warm."""
 
@@ -140,21 +139,21 @@ KNOWLEDGE BASE:
 
 {prompt_template}
 
-IMPORTANT: Your response will be converted to speech. 
+IMPORTANT: Your response will be converted to speech.
 - Use natural, spoken language
 - Avoid bullet points, formatting, or special characters
 - Keep sentences short and clear
 - Use conversational phrasing"""
 
         user_message = f"""CONTEXT:
-- Customer Name: {context.get('customer_name', 'Unknown')}
-- Time of Day: {context.get('time_of_day', 'day')}
+- Customer Name: {context.get("customer_name", "Unknown")}
+- Time of Day: {context.get("time_of_day", "day")}
 
 CONVERSATION HISTORY:
-{context.get('conversation_history', '')}
+{context.get("conversation_history", "")}
 
 VOICE NOTE TRANSCRIPT:
-{context.get('transcript', '')}
+{context.get("transcript", "")}
 
 Generate a natural spoken response suitable for a voice note reply."""
 
@@ -169,7 +168,7 @@ Generate a natural spoken response suitable for a voice note reply."""
 
         return response.strip()
 
-    async def extract_qualification(self, conversation: str) -> Optional[dict[str, Any]]:
+    async def extract_qualification(self, conversation: str) -> dict[str, Any] | None:
         """Extract lead qualification data from conversation."""
         prompt_template = self._load_prompt("qualification-extractor")
 
@@ -229,9 +228,9 @@ Extract all available qualification data as JSON with this structure:
                 response = response.split("```")[1]
                 if response.startswith("json"):
                     response = response[4:]
-            
+
             qualification = json.loads(response)
-            
+
             logger.info(
                 "qualification_extracted",
                 lead_score=qualification.get("qualification", {}).get("lead_score"),

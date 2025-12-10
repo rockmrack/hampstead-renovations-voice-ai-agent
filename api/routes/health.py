@@ -3,9 +3,8 @@
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Response
-
 from config import settings
+from fastapi import APIRouter, Response
 
 logger = structlog.get_logger(__name__)
 

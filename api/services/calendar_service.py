@@ -4,13 +4,11 @@ Handles booking management via Microsoft Bookings/Calendar.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -24,8 +22,8 @@ class CalendarService:
         self.tenant_id = settings.microsoft_tenant_id
         self.ross_email = settings.ross_email
         self.base_url = "https://graph.microsoft.com/v1.0"
-        self._access_token: Optional[str] = None
-        self._token_expires: Optional[datetime] = None
+        self._access_token: str | None = None
+        self._token_expires: datetime | None = None
 
     async def _get_access_token(self) -> str:
         """Get or refresh OAuth access token."""
@@ -33,7 +31,7 @@ class CalendarService:
             return self._access_token
 
         token_url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
-        
+
         data = {
             "grant_type": "client_credentials",
             "client_id": self.client_id,
@@ -77,17 +75,17 @@ class CalendarService:
     ) -> list[dict]:
         """
         Get available time slots for a given date.
-        
+
         Args:
             date: Date in YYYY-MM-DD format
             time_preference: 'morning', 'afternoon', 'any'
             duration_minutes: Required duration
-            
+
         Returns:
             List of available slots
         """
         headers = await self._get_headers()
-        
+
         # Parse date
         try:
             target_date = datetime.strptime(date, "%Y-%m-%d")
@@ -118,7 +116,7 @@ class CalendarService:
 
         # Get calendar free/busy
         url = f"{self.base_url}/users/{self.ross_email}/calendar/getSchedule"
-        
+
         payload = {
             "schedules": [self.ross_email],
             "startTime": {
@@ -145,18 +143,20 @@ class CalendarService:
             # Find free slots (0 = free, 1 = tentative, 2 = busy, 3 = OOF)
             available_slots = []
             current_time = start_datetime
-            
+
             for i, status in enumerate(availability_view):
                 if status == "0":  # Free
                     slot_time = current_time + timedelta(minutes=i * 30)
                     if slot_time.hour < end_hour:
-                        available_slots.append({
-                            "date": date,
-                            "time": slot_time.strftime("%H:%M"),
-                            "datetime": slot_time.isoformat(),
-                            "duration": duration_minutes,
-                        })
-                        
+                        available_slots.append(
+                            {
+                                "date": date,
+                                "time": slot_time.strftime("%H:%M"),
+                                "datetime": slot_time.isoformat(),
+                                "duration": duration_minutes,
+                            }
+                        )
+
             # Return reasonable number of slots
             return available_slots[:6]
 
@@ -209,18 +209,18 @@ class CalendarService:
         address: str,
         date: str,
         time: str,
-        email: Optional[str] = None,
-        project_type: Optional[str] = None,
-        notes: Optional[str] = None,
+        email: str | None = None,
+        project_type: str | None = None,
+        notes: str | None = None,
     ) -> str:
         """
         Create a survey booking in the calendar.
-        
+
         Returns:
             Event ID
         """
         headers = await self._get_headers()
-        
+
         # Parse datetime
         start_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
         end_dt = start_dt + timedelta(hours=1)
@@ -230,10 +230,10 @@ class CalendarService:
 <b>Site Survey Booking</b><br><br>
 <b>Customer:</b> {name}<br>
 <b>Phone:</b> {phone}<br>
-<b>Email:</b> {email or 'Not provided'}<br>
+<b>Email:</b> {email or "Not provided"}<br>
 <b>Address:</b> {address}<br>
-<b>Project Type:</b> {project_type or 'General enquiry'}<br>
-<b>Notes:</b> {notes or 'None'}<br><br>
+<b>Project Type:</b> {project_type or "General enquiry"}<br>
+<b>Notes:</b> {notes or "None"}<br><br>
 <i>Booked via AI Voice Agent</i>
 """
 
@@ -260,10 +260,12 @@ class CalendarService:
         }
 
         if email:
-            event["attendees"].append({
-                "emailAddress": {"address": email, "name": name},
-                "type": "optional",
-            })
+            event["attendees"].append(
+                {
+                    "emailAddress": {"address": email, "name": name},
+                    "type": "optional",
+                }
+            )
 
         url = f"{self.base_url}/users/{self.ross_email}/events"
 
@@ -274,7 +276,7 @@ class CalendarService:
                 data = response.json()
 
             event_id = data["id"]
-            
+
             logger.info(
                 "survey_booking_created",
                 event_id=event_id,
@@ -289,7 +291,7 @@ class CalendarService:
             logger.error("calendar_create_booking_error", error=str(e))
             raise
 
-    async def cancel_booking(self, event_id: str, reason: Optional[str] = None) -> bool:
+    async def cancel_booking(self, event_id: str, reason: str | None = None) -> bool:
         """Cancel an existing booking."""
         headers = await self._get_headers()
         url = f"{self.base_url}/users/{self.ross_email}/events/{event_id}"
@@ -314,12 +316,12 @@ class CalendarService:
     ) -> bool:
         """Reschedule an existing booking."""
         headers = await self._get_headers()
-        
+
         start_dt = datetime.strptime(f"{new_date} {new_time}", "%Y-%m-%d %H:%M")
         end_dt = start_dt + timedelta(hours=1)
 
         url = f"{self.base_url}/users/{self.ross_email}/events/{event_id}"
-        
+
         patch_data = {
             "start": {
                 "dateTime": start_dt.isoformat(),
@@ -351,7 +353,7 @@ class CalendarService:
     async def get_upcoming_bookings(self, days: int = 7) -> list[dict]:
         """Get upcoming survey bookings."""
         headers = await self._get_headers()
-        
+
         start_dt = datetime.utcnow()
         end_dt = start_dt + timedelta(days=days)
 

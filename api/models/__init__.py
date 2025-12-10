@@ -3,12 +3,12 @@ Models package initialization.
 """
 
 from .conversation import (
-    WhatsAppMessage,
-    WhatsAppWebhookPayload,
-    VoiceNote,
     ConversationContext,
     LeadQualification,
     SurveyBooking,
+    VoiceNote,
+    WhatsAppMessage,
+    WhatsAppWebhookPayload,
 )
 
 __all__ = [

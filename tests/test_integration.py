@@ -2,8 +2,9 @@
 Integration tests for end-to-end flows.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 class TestWhatsAppFlow:
@@ -22,7 +23,7 @@ class TestWhatsAppFlow:
 
     def test_text_message_webhook(self, client, sample_whatsapp_text_message):
         """Test processing text message webhook."""
-        with patch("routes.whatsapp.process_message_background") as mock_process:
+        with patch("routes.whatsapp.process_message_background"):
             response = client.post(
                 "/whatsapp/webhook",
                 json=sample_whatsapp_text_message,
@@ -31,7 +32,7 @@ class TestWhatsAppFlow:
 
     def test_audio_message_webhook(self, client, sample_whatsapp_audio_message):
         """Test processing audio message webhook."""
-        with patch("routes.whatsapp.process_message_background") as mock_process:
+        with patch("routes.whatsapp.process_message_background"):
             response = client.post(
                 "/whatsapp/webhook",
                 json=sample_whatsapp_audio_message,
@@ -64,14 +65,16 @@ class TestVAPIFlow:
 
     def test_call_ended_webhook(self, client, sample_vapi_call_ended):
         """Test VAPI call ended handling."""
-        with patch("routes.vapi_webhooks.vapi_service.verify_webhook_signature", return_value=True):
-            with patch("routes.vapi_webhooks.process_call_ended") as mock_process:
-                response = client.post(
-                    "/vapi/webhook",
-                    json=sample_vapi_call_ended,
-                    headers={"X-Vapi-Signature": "test-signature"},
-                )
-                assert response.status_code in [200, 401]
+        with (
+            patch("routes.vapi_webhooks.vapi_service.verify_webhook_signature", return_value=True),
+            patch("routes.vapi_webhooks.process_call_ended"),
+        ):
+            response = client.post(
+                "/vapi/webhook",
+                json=sample_vapi_call_ended,
+                headers={"X-Vapi-Signature": "test-signature"},
+            )
+            assert response.status_code in [200, 401]
 
 
 class TestCalendarFlow:
@@ -89,14 +92,16 @@ class TestCalendarFlow:
 
     def test_create_booking(self, client, sample_booking_request, mock_calendar_service):
         """Test creating a survey booking."""
-        with patch("routes.calendar.calendar_service", mock_calendar_service):
-            with patch("routes.calendar.hubspot_service") as mock_hubspot:
-                mock_hubspot.create_or_update_contact = AsyncMock(return_value={"id": "123"})
-                response = client.post(
-                    "/calendar/book",
-                    json=sample_booking_request,
-                )
-                assert response.status_code in [200, 201, 401, 422]
+        with (
+            patch("routes.calendar.calendar_service", mock_calendar_service),
+            patch("routes.calendar.hubspot_service") as mock_hubspot,
+        ):
+            mock_hubspot.create_or_update_contact = AsyncMock(return_value={"id": "123"})
+            response = client.post(
+                "/calendar/book",
+                json=sample_booking_request,
+            )
+            assert response.status_code in [200, 201, 401, 422]
 
 
 class TestHealthFlow:
@@ -136,16 +141,16 @@ class TestLeadQualificationFlow:
             conversation="I want a full kitchen renovation in NW3, budget £80k",
             phone="+447912345678",
         )
-        
+
         assert qualification["qualification"]["lead_tier"] in ["hot", "warm", "cold"]
-        
+
         # 2. Update HubSpot
         await mock_hubspot_service.update_lead_qualification(
             phone="+447912345678",
             qualification=qualification,
         )
         mock_hubspot_service.update_lead_qualification.assert_called_once()
-        
+
         # 3. Notify if hot lead
         if qualification["qualification"]["lead_tier"] == "hot":
             await mock_notification_service.notify_new_lead(
@@ -175,7 +180,7 @@ class TestBookingFlow:
             time_preference="morning",
         )
         assert len(slots) > 0
-        
+
         # 2. Create booking
         event_id = await mock_calendar_service.create_survey_booking(
             name="John Smith",
@@ -185,19 +190,19 @@ class TestBookingFlow:
             time=slots[0]["time"],
         )
         assert event_id is not None
-        
+
         # 3. Update HubSpot
         await mock_hubspot_service.create_or_update_contact(
             phone="+447912345678",
             name="John Smith",
         )
-        
+
         # 4. Send confirmation
         await mock_whatsapp_service.send_text_message(
             to="+447912345678",
             message="Your survey is booked!",
         )
-        
+
         # 5. Notify team
         await mock_notification_service.notify_booking_created(
             customer_name="John Smith",

@@ -4,9 +4,8 @@ Handles incoming text messages and voice notes via 360dialog webhook.
 """
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-
 from config import settings
+from fastapi import APIRouter, BackgroundTasks, Request
 from models.conversation import WhatsAppMessage
 from services.claude_service import claude_service
 from services.conversation_service import conversation_service
@@ -51,7 +50,9 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks) 
                 from_number=message.get("from"),
                 message_type=message.get("type"),
                 text=message.get("text", {}).get("body") if message.get("type") == "text" else None,
-                audio_id=message.get("audio", {}).get("id") if message.get("type") == "audio" else None,
+                audio_id=message.get("audio", {}).get("id")
+                if message.get("type") == "audio"
+                else None,
                 contact_name=contacts[0].get("profile", {}).get("name") if contacts else None,
                 timestamp=message.get("timestamp"),
             )
@@ -153,7 +154,9 @@ async def handle_text_message(msg: WhatsAppMessage, history: str) -> str:
 
         # Analyze sentiment for escalation
         if settings.enable_sentiment_analysis:
-            sentiment = await claude_service.analyze_sentiment(f"Customer: {msg.text}\nAgent: {response}")
+            sentiment = await claude_service.analyze_sentiment(
+                f"Customer: {msg.text}\nAgent: {response}"
+            )
             if sentiment.get("escalation_assessment", {}).get("requires_escalation"):
                 await notification_service.notify_escalation(
                     phone=msg.from_number,
@@ -205,7 +208,9 @@ async def update_lead_qualification(
 ) -> None:
     """Extract and update lead qualification data."""
     try:
-        full_conversation = f"History:\n{history}\n\nCustomer: {customer_message}\nAgent: {agent_response}"
+        full_conversation = (
+            f"History:\n{history}\n\nCustomer: {customer_message}\nAgent: {agent_response}"
+        )
 
         qualification = await claude_service.extract_qualification(full_conversation)
 

@@ -3,15 +3,14 @@ VAPI voice call service.
 Handles live phone calls via VAPI integration.
 """
 
-import hmac
 import hashlib
-from typing import Any, Optional
+import hmac
+from typing import Any
 
 import httpx
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 from config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = structlog.get_logger(__name__)
 
@@ -39,11 +38,11 @@ class VAPIService:
     ) -> bool:
         """
         Verify VAPI webhook signature.
-        
+
         Args:
             payload: Raw request body bytes
             signature: X-Vapi-Signature header value
-            
+
         Returns:
             True if signature is valid
         """
@@ -57,9 +56,9 @@ class VAPIService:
                 payload,
                 hashlib.sha256,
             ).hexdigest()
-            
+
             return hmac.compare_digest(expected, signature)
-            
+
         except Exception as e:
             logger.error("vapi_signature_verification_error", error=str(e))
             return False
@@ -71,24 +70,24 @@ class VAPIService:
     async def create_call(
         self,
         phone_number: str,
-        assistant_id: Optional[str] = None,
-        first_message: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        assistant_id: str | None = None,
+        first_message: str | None = None,
+        metadata: dict | None = None,
     ) -> dict:
         """
         Initiate an outbound call.
-        
+
         Args:
             phone_number: Number to call (E.164 format)
             assistant_id: Override default assistant
             first_message: Custom first message
             metadata: Additional call metadata
-            
+
         Returns:
             Call object from VAPI
         """
         url = f"{self.base_url}/call/phone"
-        
+
         payload = {
             "assistantId": assistant_id or self.assistant_id,
             "phoneNumberId": settings.vapi_phone_number_id,
@@ -96,12 +95,12 @@ class VAPIService:
                 "number": phone_number,
             },
         }
-        
+
         if first_message:
             payload["assistantOverrides"] = {
                 "firstMessage": first_message,
             }
-            
+
         if metadata:
             payload["metadata"] = metadata
 
@@ -113,21 +112,21 @@ class VAPIService:
                     json=payload,
                 )
                 response.raise_for_status()
-                
+
                 call_data = response.json()
                 logger.info(
                     "vapi_call_created",
                     call_id=call_data.get("id"),
                     phone=phone_number[-4:],
                 )
-                
+
                 return call_data
 
         except Exception as e:
             logger.error("vapi_create_call_error", error=str(e))
             raise
 
-    async def get_call(self, call_id: str) -> Optional[dict]:
+    async def get_call(self, call_id: str) -> dict | None:
         """Get call details by ID."""
         url = f"{self.base_url}/call/{call_id}"
 
@@ -149,7 +148,7 @@ class VAPIService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, headers=self._get_headers())
                 response.raise_for_status()
-                
+
                 logger.info("vapi_call_ended", call_id=call_id)
                 return True
 
@@ -161,25 +160,25 @@ class VAPIService:
         self,
         call_id: str,
         destination: str,
-        message: Optional[str] = None,
+        message: str | None = None,
     ) -> bool:
         """
         Transfer call to another number.
-        
+
         Args:
             call_id: Active call ID
             destination: Number to transfer to
             message: Message to play before transfer
         """
         url = f"{self.base_url}/call/{call_id}/transfer"
-        
+
         payload = {
             "destination": {
                 "type": "number",
                 "number": destination,
             }
         }
-        
+
         if message:
             payload["message"] = message
 
@@ -191,7 +190,7 @@ class VAPIService:
                     json=payload,
                 )
                 response.raise_for_status()
-                
+
                 logger.info(
                     "vapi_call_transferred",
                     call_id=call_id,
@@ -211,12 +210,12 @@ class VAPIService:
     ) -> dict:
         """
         Handle VAPI function call webhook.
-        
+
         Args:
             function_name: Name of function to execute
             parameters: Function parameters
             call_id: Associated call ID
-            
+
         Returns:
             Function result to return to VAPI
         """
@@ -238,11 +237,11 @@ class VAPIService:
         handler = handlers.get(function_name)
         if handler:
             return handler(parameters, call_id)
-        
+
         logger.warning("unknown_function_call", function=function_name)
         return {"error": f"Unknown function: {function_name}"}
 
-    def _handle_check_availability(self, params: dict, call_id: str) -> dict:
+    def _handle_check_availability(self, _params: dict, _call_id: str) -> dict:
         """Handle availability check function."""
         # This would integrate with calendar_service
         return {
@@ -251,7 +250,7 @@ class VAPIService:
             "slots": ["10:00", "14:00", "16:00"],
         }
 
-    def _handle_book_survey(self, params: dict, call_id: str) -> dict:
+    def _handle_book_survey(self, _params: dict, call_id: str) -> dict:
         """Handle survey booking function."""
         return {
             "success": True,
@@ -259,23 +258,23 @@ class VAPIService:
             "confirmation_number": f"HR-{call_id[:8].upper()}",
         }
 
-    def _handle_get_pricing(self, params: dict, call_id: str) -> dict:
+    def _handle_get_pricing(self, params: dict, _call_id: str) -> dict:
         """Handle pricing inquiry function."""
         project_type = params.get("project_type", "general")
-        
+
         pricing_info = {
             "kitchen": "Kitchen renovations typically range from £25,000 to £75,000",
             "bathroom": "Bathroom renovations typically range from £15,000 to £40,000",
             "extension": "Extensions typically range from £50,000 to £150,000",
             "general": "Projects typically range from £15,000 to £150,000 depending on scope",
         }
-        
+
         return {
             "pricing": pricing_info.get(project_type.lower(), pricing_info["general"]),
             "note": "We provide free detailed quotes after a site survey",
         }
 
-    def _handle_transfer_to_human(self, params: dict, call_id: str) -> dict:
+    def _handle_transfer_to_human(self, _params: dict, _call_id: str) -> dict:
         """Handle transfer to human request."""
         return {
             "action": "transfer",
@@ -283,7 +282,7 @@ class VAPIService:
             "message": "Transferring you to Ross now. Please hold.",
         }
 
-    def _handle_send_information(self, params: dict, call_id: str) -> dict:
+    def _handle_send_information(self, _params: dict, _call_id: str) -> dict:
         """Handle send information request."""
         return {
             "success": True,
