@@ -5,12 +5,10 @@ Provides live updates for admin dashboard.
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
 
 import structlog
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-
 from services.websocket_service import connection_manager, dashboard_emitter
 
 logger = structlog.get_logger(__name__)
@@ -20,6 +18,7 @@ router = APIRouter()
 
 class DashboardStats(BaseModel):
     """Current dashboard statistics."""
+
     active_conversations: int = 0
     total_messages_today: int = 0
     leads_qualified_today: int = 0
@@ -36,16 +35,16 @@ _conversation_cache: dict[str, dict] = {}
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    client_id: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
+    client_id: str | None = Query(None),
+    token: str | None = Query(None),
 ):
     """
     Main WebSocket endpoint for real-time dashboard updates.
-    
+
     Query params:
         client_id: Optional client identifier
         token: Authentication token (required in production)
-    
+
     Message protocol:
         Send: {"action": "subscribe", "channel": "conversations"}
         Receive: {"event": "...", "timestamp": "...", "data": {...}}
@@ -56,24 +55,27 @@ async def websocket_endpoint(
     #     return
 
     await connection_manager.connect(websocket, client_id)
-    
+
     try:
         # Send initial state
-        await connection_manager.send_personal(websocket, {
-            "event": "connected",
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": {
-                "client_id": client_id,
-                "stats": _dashboard_stats.model_dump(),
-                "active_conversations": list(_conversation_cache.values())[-10:],  # Last 10
+        await connection_manager.send_personal(
+            websocket,
+            {
+                "event": "connected",
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "client_id": client_id,
+                    "stats": _dashboard_stats.model_dump(),
+                    "active_conversations": list(_conversation_cache.values())[-10:],  # Last 10
+                },
             },
-        })
-        
+        )
+
         # Handle incoming messages
         while True:
             data = await websocket.receive_json()
             await handle_websocket_message(websocket, data)
-            
+
     except WebSocketDisconnect:
         await connection_manager.disconnect(websocket)
     except Exception as e:
@@ -84,43 +86,58 @@ async def websocket_endpoint(
 async def handle_websocket_message(websocket: WebSocket, data: dict) -> None:
     """Handle incoming WebSocket messages."""
     action = data.get("action")
-    
+
     if action == "subscribe":
         channel = data.get("channel", "*")
         await connection_manager.subscribe(websocket, channel)
-        await connection_manager.send_personal(websocket, {
-            "event": "subscribed",
-            "channel": channel,
-        })
-        
+        await connection_manager.send_personal(
+            websocket,
+            {
+                "event": "subscribed",
+                "channel": channel,
+            },
+        )
+
     elif action == "unsubscribe":
         channel = data.get("channel")
         if channel:
             await connection_manager.unsubscribe(websocket, channel)
-            await connection_manager.send_personal(websocket, {
-                "event": "unsubscribed",
-                "channel": channel,
-            })
-            
+            await connection_manager.send_personal(
+                websocket,
+                {
+                    "event": "unsubscribed",
+                    "channel": channel,
+                },
+            )
+
     elif action == "ping":
-        await connection_manager.send_personal(websocket, {
-            "event": "pong",
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-        
+        await connection_manager.send_personal(
+            websocket,
+            {
+                "event": "pong",
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+
     elif action == "get_stats":
-        await connection_manager.send_personal(websocket, {
-            "event": "stats",
-            "data": _dashboard_stats.model_dump(),
-        })
-        
+        await connection_manager.send_personal(
+            websocket,
+            {
+                "event": "stats",
+                "data": _dashboard_stats.model_dump(),
+            },
+        )
+
     elif action == "get_conversations":
         limit = data.get("limit", 20)
         conversations = list(_conversation_cache.values())[-limit:]
-        await connection_manager.send_personal(websocket, {
-            "event": "conversations",
-            "data": conversations,
-        })
+        await connection_manager.send_personal(
+            websocket,
+            {
+                "event": "conversations",
+                "data": conversations,
+            },
+        )
 
 
 @router.get("/stats")
@@ -149,7 +166,7 @@ async def update_conversation_cache(
     conversation_id: str,
     channel: str,
     customer_phone: str,
-    customer_name: Optional[str] = None,
+    customer_name: str | None = None,
     status: str = "active",
 ) -> None:
     """Update conversation in cache and emit event."""
@@ -164,14 +181,14 @@ async def update_conversation_cache(
         "lead_score": None,
         "watched": False,
     }
-    
+
     await dashboard_emitter.emit_conversation_started(
         conversation_id=conversation_id,
         channel=channel,
         customer_phone=customer_phone,
         customer_name=customer_name,
     )
-    
+
     _dashboard_stats.active_conversations = len(
         [c for c in _conversation_cache.values() if c["status"] == "active"]
     )
@@ -185,24 +202,27 @@ async def add_message_to_conversation(
 ) -> None:
     """Add message to conversation and emit event."""
     if conversation_id in _conversation_cache:
-        _conversation_cache[conversation_id]["messages"].append({
-            "content": content[:500],
-            "direction": direction,
-            "type": message_type,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-        
+        _conversation_cache[conversation_id]["messages"].append(
+            {
+                "content": content[:500],
+                "direction": direction,
+                "type": message_type,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
+
         # Keep only last 50 messages per conversation
-        _conversation_cache[conversation_id]["messages"] = \
-            _conversation_cache[conversation_id]["messages"][-50:]
-    
+        _conversation_cache[conversation_id]["messages"] = _conversation_cache[conversation_id][
+            "messages"
+        ][-50:]
+
     await dashboard_emitter.emit_message_received(
         conversation_id=conversation_id,
         message_type=message_type,
         content=content,
         direction=direction,
     )
-    
+
     _dashboard_stats.total_messages_today += 1
 
 
@@ -217,7 +237,7 @@ async def update_lead_score(
     if conversation_id in _conversation_cache:
         old_score = _conversation_cache[conversation_id].get("lead_score", 0) or 0
         _conversation_cache[conversation_id]["lead_score"] = score
-    
+
     await dashboard_emitter.emit_lead_score_update(
         conversation_id=conversation_id,
         phone=phone,
@@ -225,7 +245,7 @@ async def update_lead_score(
         new_score=score,
         qualification_data=qualification_data,
     )
-    
+
     if score >= 70 and old_score < 70:
         _dashboard_stats.leads_qualified_today += 1
 
@@ -235,7 +255,7 @@ async def close_conversation(conversation_id: str) -> None:
     if conversation_id in _conversation_cache:
         _conversation_cache[conversation_id]["status"] = "closed"
         _conversation_cache[conversation_id]["closed_at"] = datetime.utcnow().isoformat()
-        
+
         _dashboard_stats.active_conversations = len(
             [c for c in _conversation_cache.values() if c["status"] == "active"]
         )
@@ -259,16 +279,16 @@ async def cleanup_old_conversations():
         try:
             await asyncio.sleep(3600)  # Every hour
             cutoff = datetime.utcnow() - timedelta(hours=24)
-            
+
             to_remove = []
             for conv_id, conv in _conversation_cache.items():
                 started_at = datetime.fromisoformat(conv["started_at"])
                 if started_at < cutoff:
                     to_remove.append(conv_id)
-            
+
             for conv_id in to_remove:
                 del _conversation_cache[conv_id]
-                
+
             logger.info("cleaned_old_conversations", count=len(to_remove))
         except Exception as e:
             logger.error("cleanup_error", error=str(e))

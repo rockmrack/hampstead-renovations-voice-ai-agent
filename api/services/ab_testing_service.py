@@ -7,10 +7,9 @@ import hashlib
 import json
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
 
 import structlog
 
@@ -19,6 +18,7 @@ logger = structlog.get_logger(__name__)
 
 class ExperimentStatus(str, Enum):
     """Status of an A/B test experiment."""
+
     DRAFT = "draft"
     RUNNING = "running"
     PAUSED = "paused"
@@ -29,6 +29,7 @@ class ExperimentStatus(str, Enum):
 @dataclass
 class PromptVariant:
     """A variant in an A/B test."""
+
     id: str
     name: str
     prompt_content: str
@@ -58,18 +59,19 @@ class PromptVariant:
 @dataclass
 class Experiment:
     """An A/B test experiment."""
+
     id: str
     name: str
     description: str
     prompt_type: str  # e.g., "whatsapp-text-handler", "phone-call-agent"
     variants: list[PromptVariant]
     status: ExperimentStatus = ExperimentStatus.DRAFT
-    winner_variant_id: Optional[str] = None
+    winner_variant_id: str | None = None
     min_sample_size: int = 100
     confidence_level: float = 0.95
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     @property
     def total_impressions(self) -> int:
@@ -89,7 +91,9 @@ class ABTestingService:
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(exist_ok=True)
         self.experiments: dict[str, Experiment] = {}
-        self.user_assignments: dict[str, dict[str, str]] = {}  # user_id -> {experiment_id: variant_id}
+        self.user_assignments: dict[
+            str, dict[str, str]
+        ] = {}  # user_id -> {experiment_id: variant_id}
         self._load_experiments()
 
     def _load_experiments(self) -> None:
@@ -172,8 +176,10 @@ class ABTestingService:
         min_sample_size: int = 100,
     ) -> Experiment:
         """Create a new A/B test experiment."""
-        experiment_id = hashlib.md5(f"{name}{datetime.utcnow().isoformat()}".encode()).hexdigest()[:12]
-        
+        experiment_id = hashlib.md5(f"{name}{datetime.utcnow().isoformat()}".encode()).hexdigest()[
+            :12
+        ]
+
         prompt_variants = [
             PromptVariant(
                 id=f"{experiment_id}_{i}",
@@ -183,7 +189,7 @@ class ABTestingService:
             )
             for i, v in enumerate(variants)
         ]
-        
+
         experiment = Experiment(
             id=experiment_id,
             name=name,
@@ -192,29 +198,29 @@ class ABTestingService:
             variants=prompt_variants,
             min_sample_size=min_sample_size,
         )
-        
+
         self.experiments[experiment.id] = experiment
         self._save_experiments()
-        
+
         logger.info(
             "experiment_created",
             experiment_id=experiment.id,
             name=name,
             variants_count=len(variants),
         )
-        
+
         return experiment
 
     def start_experiment(self, experiment_id: str) -> bool:
         """Start an experiment."""
         if experiment_id not in self.experiments:
             return False
-        
+
         experiment = self.experiments[experiment_id]
         experiment.status = ExperimentStatus.RUNNING
         experiment.started_at = datetime.utcnow()
         self._save_experiments()
-        
+
         logger.info("experiment_started", experiment_id=experiment_id)
         return True
 
@@ -222,11 +228,11 @@ class ABTestingService:
         """Pause an experiment."""
         if experiment_id not in self.experiments:
             return False
-        
+
         experiment = self.experiments[experiment_id]
         experiment.status = ExperimentStatus.PAUSED
         self._save_experiments()
-        
+
         logger.info("experiment_paused", experiment_id=experiment_id)
         return True
 
@@ -234,13 +240,13 @@ class ABTestingService:
         self,
         experiment_id: str,
         user_id: str,
-    ) -> Optional[PromptVariant]:
+    ) -> PromptVariant | None:
         """Get or assign a variant for a user (sticky assignment)."""
         if experiment_id not in self.experiments:
             return None
-        
+
         experiment = self.experiments[experiment_id]
-        
+
         if experiment.status != ExperimentStatus.RUNNING:
             # Return winner if selected, otherwise control (first variant)
             if experiment.winner_variant_id:
@@ -249,44 +255,43 @@ class ABTestingService:
                     experiment.variants[0],
                 )
             return experiment.variants[0]
-        
+
         # Check for existing assignment
-        if user_id in self.user_assignments:
-            if experiment_id in self.user_assignments[user_id]:
-                variant_id = self.user_assignments[user_id][experiment_id]
-                return next(
-                    (v for v in experiment.variants if v.id == variant_id),
-                    None,
-                )
-        
+        if user_id in self.user_assignments and experiment_id in self.user_assignments[user_id]:
+            variant_id = self.user_assignments[user_id][experiment_id]
+            return next(
+                (v for v in experiment.variants if v.id == variant_id),
+                None,
+            )
+
         # Assign new variant based on weights
         variant = self._weighted_random_choice(experiment.variants)
-        
+
         # Store assignment
         if user_id not in self.user_assignments:
             self.user_assignments[user_id] = {}
         self.user_assignments[user_id][experiment_id] = variant.id
-        
+
         logger.debug(
             "variant_assigned",
             experiment_id=experiment_id,
             user_id=user_id[:8],
             variant_id=variant.id,
         )
-        
+
         return variant
 
     def _weighted_random_choice(self, variants: list[PromptVariant]) -> PromptVariant:
         """Select a variant based on weights."""
         total_weight = sum(v.weight for v in variants)
         r = random.uniform(0, total_weight)
-        
+
         cumulative = 0
         for variant in variants:
             cumulative += variant.weight
             if r <= cumulative:
                 return variant
-        
+
         return variants[-1]
 
     def record_impression(
@@ -299,7 +304,7 @@ class ABTestingService:
         """Record an impression for a variant."""
         if experiment_id not in self.experiments:
             return
-        
+
         experiment = self.experiments[experiment_id]
         for variant in experiment.variants:
             if variant.id == variant_id:
@@ -307,7 +312,7 @@ class ABTestingService:
                 variant.total_response_time_ms += response_time_ms
                 variant.total_sentiment_score += sentiment_score
                 break
-        
+
         # Auto-save periodically (every 10 impressions)
         if experiment.total_impressions % 10 == 0:
             self._save_experiments()
@@ -320,7 +325,7 @@ class ABTestingService:
         """Record a conversion for a variant."""
         if experiment_id not in self.experiments:
             return
-        
+
         experiment = self.experiments[experiment_id]
         for variant in experiment.variants:
             if variant.id == variant_id:
@@ -332,28 +337,28 @@ class ABTestingService:
                     total_conversions=variant.conversions,
                 )
                 break
-        
+
         self._save_experiments()
-        
+
         # Check for auto-completion
         self._check_experiment_completion(experiment_id)
 
     def _check_experiment_completion(self, experiment_id: str) -> None:
         """Check if experiment has enough data to determine winner."""
         experiment = self.experiments[experiment_id]
-        
+
         if not experiment.is_significant:
             return
-        
+
         # Calculate statistical significance using chi-squared test approximation
         winner = self._determine_winner(experiment)
-        
+
         if winner:
             experiment.status = ExperimentStatus.WINNER_SELECTED
             experiment.winner_variant_id = winner.id
             experiment.completed_at = datetime.utcnow()
             self._save_experiments()
-            
+
             logger.info(
                 "experiment_winner_selected",
                 experiment_id=experiment_id,
@@ -361,35 +366,37 @@ class ABTestingService:
                 winner_conversion_rate=winner.conversion_rate,
             )
 
-    def _determine_winner(self, experiment: Experiment) -> Optional[PromptVariant]:
+    def _determine_winner(self, experiment: Experiment) -> PromptVariant | None:
         """Determine the winning variant using conversion rate."""
         if len(experiment.variants) < 2:
             return experiment.variants[0] if experiment.variants else None
-        
+
         # Sort by conversion rate
         sorted_variants = sorted(
             experiment.variants,
             key=lambda v: v.conversion_rate,
             reverse=True,
         )
-        
+
         best = sorted_variants[0]
         second = sorted_variants[1]
-        
+
         # Simple significance check: >10% improvement with enough samples
-        if best.conversion_rate > second.conversion_rate * 1.1:
-            if best.impressions >= experiment.min_sample_size:
-                return best
-        
+        if (
+            best.conversion_rate > second.conversion_rate * 1.1
+            and best.impressions >= experiment.min_sample_size
+        ):
+            return best
+
         return None
 
-    def get_experiment_report(self, experiment_id: str) -> Optional[dict]:
+    def get_experiment_report(self, experiment_id: str) -> dict | None:
         """Get detailed report for an experiment."""
         if experiment_id not in self.experiments:
             return None
-        
+
         experiment = self.experiments[experiment_id]
-        
+
         return {
             "id": experiment.id,
             "name": experiment.name,
@@ -414,13 +421,16 @@ class ABTestingService:
             ],
             "created_at": experiment.created_at.isoformat(),
             "started_at": experiment.started_at.isoformat() if experiment.started_at else None,
-            "completed_at": experiment.completed_at.isoformat() if experiment.completed_at else None,
+            "completed_at": experiment.completed_at.isoformat()
+            if experiment.completed_at
+            else None,
         }
 
     def get_active_experiments_for_prompt_type(self, prompt_type: str) -> list[Experiment]:
         """Get all active experiments for a prompt type."""
         return [
-            exp for exp in self.experiments.values()
+            exp
+            for exp in self.experiments.values()
             if exp.prompt_type == prompt_type and exp.status == ExperimentStatus.RUNNING
         ]
 
@@ -429,25 +439,25 @@ class ABTestingService:
         prompt_type: str,
         user_id: str,
         default_prompt: str,
-    ) -> tuple[str, Optional[str], Optional[str]]:
+    ) -> tuple[str, str | None, str | None]:
         """
         Get the prompt content for a user, considering any active experiments.
-        
+
         Returns:
             Tuple of (prompt_content, experiment_id, variant_id)
         """
         active_experiments = self.get_active_experiments_for_prompt_type(prompt_type)
-        
+
         if not active_experiments:
             return default_prompt, None, None
-        
+
         # Use first active experiment
         experiment = active_experiments[0]
         variant = self.get_variant_for_user(experiment.id, user_id)
-        
+
         if variant:
             return variant.prompt_content, experiment.id, variant.id
-        
+
         return default_prompt, None, None
 
 

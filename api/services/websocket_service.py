@@ -6,11 +6,10 @@ Handles live updates for conversations, metrics, and agent activities.
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, Optional
 from weakref import WeakSet
 
 import structlog
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
 logger = structlog.get_logger(__name__)
 
@@ -23,7 +22,7 @@ class ConnectionManager:
         self.connection_metadata: dict[int, dict] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, client_id: Optional[str] = None) -> None:
+    async def connect(self, websocket: WebSocket, client_id: str | None = None) -> None:
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
         async with self._lock:
@@ -62,7 +61,7 @@ class ConnectionManager:
         if ws_id in self.connection_metadata:
             self.connection_metadata[ws_id]["subscriptions"].discard(channel)
 
-    async def broadcast(self, message: dict, channel: Optional[str] = None) -> None:
+    async def broadcast(self, message: dict, channel: str | None = None) -> None:
         """Broadcast message to all connections or specific channel subscribers."""
         payload = json.dumps(message)
         disconnected = []
@@ -113,7 +112,7 @@ class DashboardEventEmitter:
         conversation_id: str,
         channel: str,
         customer_phone: str,
-        customer_name: Optional[str] = None,
+        customer_name: str | None = None,
     ) -> None:
         """Emit when a new conversation starts."""
         await self.manager.broadcast(
@@ -256,7 +255,7 @@ class DashboardEventEmitter:
         self,
         error_type: str,
         message: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
     ) -> None:
         """Emit error events."""
         await self.manager.broadcast(
