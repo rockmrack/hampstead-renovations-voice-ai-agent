@@ -47,3 +47,5 @@ mkdocstrings[python]==0.24.0
 ipython==8.22.1
 pre-commit==3.6.2
 watchfiles==0.21.0
+authlib>=1.6.6 # not directly required, pinned by Snyk to avoid a vulnerability
+urllib3>=2.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
